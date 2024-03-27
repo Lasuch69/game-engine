@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "camera.h"
-#include "vertex.h"
+#include "scene.h"
 #include "vk_types.h"
 #include "vulkan_context.h"
 
@@ -25,19 +25,19 @@ struct MeshPushConstants {
 	glm::mat4 modelViewNormal;
 };
 
-struct LightData {
-	glm::vec3 position;
-	float range;
-	glm::vec3 color;
-	float intensity;
-};
-
-struct Mesh {
+struct MeshInstance {
 	AllocatedBuffer vertexBuffer;
 	AllocatedBuffer indexBuffer;
 	uint32_t indexCount;
 
 	glm::mat4 transform;
+};
+
+struct LightData {
+	glm::vec3 position;
+	float range;
+	glm::vec3 color;
+	float intensity;
 };
 
 class RenderingDevice {
@@ -75,7 +75,7 @@ private:
 	vk::PipelineLayout _tonemapLayout;
 	vk::Pipeline _tonemapPipeline;
 
-	std::vector<Mesh> _meshes;
+	std::vector<MeshInstance> _meshInstances;
 	std::vector<LightData> _lights;
 	Camera *_pCamera = new Camera;
 
@@ -85,16 +85,13 @@ private:
 	void _copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
 	void _sendToBuffer(vk::Buffer dstBuffer, uint8_t *data, size_t size);
 
-	Mesh _uploadMesh(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
+	MeshInstance _uploadMesh(const Mesh *pMesh);
 
 	void _updateUniformBuffer(const Camera *pCamera);
 
 public:
-	void createMesh(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices,
-			const glm::mat4 &transform);
-
-	void createLight(const glm::vec3 &position, const glm::vec3 &color, float intensity);
-
+	void createMeshInstance(const Mesh *pMesh, const glm::mat4 &transform);
+	void createPointLight(const PointLight *pPointLight, const glm::vec3 &position);
 	void createCamera(const glm::mat4 transform, float fovY, float zNear, float zFar);
 
 	void draw();

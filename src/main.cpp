@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <glm/fwd.hpp>
 #include <variant>
 #include <vector>
 
@@ -13,13 +12,14 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/types.hpp>
 
-#include "rendering/rendering_device.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
+
+#include "rendering/rendering_device.h"
+#include "rendering/scene.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -93,7 +93,12 @@ void load(std::filesystem::path path, RenderingDevice *pDevice) {
 			intensity *= STERADIAN; // candela to lumen
 			intensity /= 1000; // lumen to arbitrary
 
-			pDevice->createLight(position, glm::make_vec3(light.color.data()), intensity);
+			PointLight pointLight{};
+			pointLight.color = glm::make_vec3(light.color.data());
+			pointLight.intensity = intensity;
+			pointLight.range = light.range.value_or(0.0f);
+
+			pDevice->createPointLight(&pointLight, position);
 			continue;
 		}
 
@@ -101,13 +106,13 @@ void load(std::filesystem::path path, RenderingDevice *pDevice) {
 		if (!hasMesh)
 			continue;
 
-		fastgltf::Mesh mesh = asset->meshes[node.meshIndex.value()];
+		fastgltf::Mesh gltfMesh = asset->meshes[node.meshIndex.value()];
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
 
 		std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
-		for (const fastgltf::Primitive &primitive : mesh.primitives) {
+		for (const fastgltf::Primitive &primitive : gltfMesh.primitives) {
 			if (primitive.indicesAccessor.has_value()) {
 				auto &accessor = asset->accessors[primitive.indicesAccessor.value()];
 				indices.resize(accessor.count);
@@ -141,7 +146,11 @@ void load(std::filesystem::path path, RenderingDevice *pDevice) {
 					[&](glm::vec3 normal, std::size_t idx) { vertices[idx].normal = normal; });
 		}
 
-		pDevice->createMesh(vertices, indices, transform);
+		Mesh mesh{};
+		mesh.vertices = vertices;
+		mesh.indices = indices;
+
+		pDevice->createMeshInstance(&mesh, transform);
 	}
 }
 

@@ -10,6 +10,8 @@
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
 
+#include "scene.h"
+
 #include "rendering_device.h"
 
 vk::ShaderModule createShaderModule(vk::Device device, const uint32_t *pCode, size_t size) {
@@ -196,34 +198,33 @@ void RenderingDevice::_sendToBuffer(vk::Buffer dstBuffer, uint8_t *data, size_t 
 	vmaDestroyBuffer(_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
 }
 
-Mesh RenderingDevice::_uploadMesh(
-		const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
+MeshInstance RenderingDevice::_uploadMesh(const Mesh *pMesh) {
 	AllocatedBuffer vertexBuffer;
 	AllocatedBuffer indexBuffer;
 
 	{
-		vk::DeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+		vk::DeviceSize bufferSize = sizeof(Vertex) * pMesh->vertices.size();
 
 		VmaAllocationInfo allocInfo;
 		vertexBuffer = createBuffer(_allocator, bufferSize,
 				vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
 				allocInfo);
 
-		_sendToBuffer(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)bufferSize);
+		_sendToBuffer(vertexBuffer.buffer, (uint8_t *)pMesh->vertices.data(), (size_t)bufferSize);
 	}
 
 	{
-		vk::DeviceSize bufferSize = sizeof(uint32_t) * indices.size();
+		vk::DeviceSize bufferSize = sizeof(uint32_t) * pMesh->indices.size();
 
 		VmaAllocationInfo allocInfo;
 		indexBuffer = createBuffer(_allocator, bufferSize,
 				vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
 				allocInfo);
 
-		_sendToBuffer(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)bufferSize);
+		_sendToBuffer(indexBuffer.buffer, (uint8_t *)pMesh->indices.data(), (size_t)bufferSize);
 	}
 
-	return Mesh{ vertexBuffer, indexBuffer, static_cast<uint32_t>(indices.size()) };
+	return MeshInstance{ vertexBuffer, indexBuffer, static_cast<uint32_t>(pMesh->indices.size()) };
 }
 
 void RenderingDevice::_updateUniformBuffer(const Camera *pCamera) {
@@ -237,22 +238,26 @@ void RenderingDevice::_updateUniformBuffer(const Camera *pCamera) {
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }
 
-void RenderingDevice::createMesh(const std::vector<Vertex> &vertices,
-		const std::vector<uint32_t> &indices, const glm::mat4 &transform) {
-	Mesh mesh = _uploadMesh(vertices, indices);
-	mesh.transform = transform;
+void RenderingDevice::createMeshInstance(const Mesh *pMesh, const glm::mat4 &transform) {
+	MeshInstance meshInstance = _uploadMesh(pMesh);
+	meshInstance.transform = transform;
 
-	_meshes.push_back(mesh);
+	_meshInstances.push_back(meshInstance);
 }
 
-void RenderingDevice::createLight(
-		const glm::vec3 &position, const glm::vec3 &color, float intensity) {
+void RenderingDevice::createPointLight(const PointLight *pPointLight, const glm::vec3 &position) {
 	if (_lights.size() >= MAX_LIGHT_COUNT) {
 		printf("Light limit of: %d exceeded!\n", MAX_LIGHT_COUNT);
 		return;
 	}
 
-	_lights.push_back(LightData{ position, 0.0f, color, intensity });
+	LightData light{};
+	light.position = position;
+	light.range = pPointLight->range;
+	light.color = pPointLight->color;
+	light.intensity = pPointLight->intensity;
+
+	_lights.push_back(light);
 
 	_sendToBuffer(
 			_lightBuffer.buffer, (uint8_t *)_lights.data(), sizeof(LightData) * MAX_LIGHT_COUNT);
@@ -339,20 +344,20 @@ void RenderingDevice::draw() {
 	glm::mat4 view = _pCamera->viewMatrix();
 
 	// draw geometry
-	for (const Mesh &mesh : _meshes) {
-		glm::mat4 modelView = mesh.transform * view;
+	for (const MeshInstance &meshInstance : _meshInstances) {
+		glm::mat4 modelView = meshInstance.transform * view;
 
 		MeshPushConstants constants{};
-		constants.model = mesh.transform;
+		constants.model = meshInstance.transform;
 		constants.modelViewNormal = glm::transpose(glm::inverse(modelView));
 
 		commandBuffer.pushConstants(_materialLayout, vk::ShaderStageFlagBits::eVertex, 0,
 				sizeof(MeshPushConstants), &constants);
 
 		vk::DeviceSize offset = 0;
-		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(mesh.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-		commandBuffer.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+		commandBuffer.bindVertexBuffers(0, 1, &meshInstance.vertexBuffer.buffer, &offset);
+		commandBuffer.bindIndexBuffer(meshInstance.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+		commandBuffer.drawIndexed(meshInstance.indexCount, 1, 0, 0, 0);
 	}
 
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);

@@ -12,6 +12,8 @@
 
 #include "loader.h"
 
+const float STERADIAN = glm::pi<float>() * 4.0f;
+
 glm::mat4 getTransformMatrix(const fastgltf::Node &node, glm::mat4x4 &base) {
 	/** Both a matrix and TRS values are not allowed
 	 * to exist at the same time according to the spec */
@@ -35,7 +37,7 @@ glm::mat4 getTransformMatrix(const fastgltf::Node &node, glm::mat4x4 &base) {
 	return base;
 }
 
-std::vector<Node> Loader::loadScene(std::filesystem::path path) {
+std::vector<Loader::Node> Loader::loadScene(std::filesystem::path path) {
 	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	fastgltf::GltfDataBuffer data;
@@ -46,14 +48,14 @@ std::vector<Node> Loader::loadScene(std::filesystem::path path) {
 
 	if (result.error() != fastgltf::Error::None) {
 		printf("Failed to load: %s, Error: %d\n", path.c_str(), (int)result.error());
-		return std::vector<Node>();
+		return std::vector<Loader::Node>();
 	}
 
 	fastgltf::Asset *pAsset = result.get_if();
 
 	glm::mat4 base = glm::mat4(1.0f);
 
-	std::vector<Node> nodes;
+	std::vector<Loader::Node> nodes;
 	for (const fastgltf::Node &gltfNode : pAsset->nodes) {
 		Node node{};
 		node.name = gltfNode.name.c_str();
@@ -66,7 +68,9 @@ std::vector<Node> Loader::loadScene(std::filesystem::path path) {
 
 			// c++'s "features", WHY?!?!?
 			std::visit(fastgltf::visitor{ [&](fastgltf::Camera::Perspective &perspective) {
-											 node.camera = perspective;
+											 node.camera =
+													 Camera{ perspective.yfov, perspective.znear,
+														 perspective.zfar.value_or(100.0f) };
 										 },
 							   [&](fastgltf::Camera::Orthographic &orthographic) {} },
 					camera.camera);

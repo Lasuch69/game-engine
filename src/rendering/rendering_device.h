@@ -2,12 +2,11 @@
 #define RENDERING_DEVICE_H
 
 #include <cstdint>
-#include <vector>
+#include <optional>
 
 #include <glm/glm.hpp>
 
-#include "camera.h"
-#include "scene.h"
+#include "vertex.h"
 #include "vk_types.h"
 #include "vulkan_context.h"
 
@@ -25,12 +24,10 @@ struct MeshPushConstants {
 	glm::mat4 modelViewNormal;
 };
 
-struct MeshInstance {
+struct Mesh {
 	AllocatedBuffer vertexBuffer;
 	AllocatedBuffer indexBuffer;
 	uint32_t indexCount;
-
-	glm::mat4 transform;
 };
 
 struct LightData {
@@ -75,33 +72,35 @@ private:
 	vk::PipelineLayout _tonemapLayout;
 	vk::Pipeline _tonemapPipeline;
 
-	std::vector<MeshInstance> _meshInstances;
-	std::vector<LightData> _lights;
-	Camera *_pCamera = new Camera;
+	std::optional<uint32_t> _imageIndex;
 
 	vk::CommandBuffer _beginSingleTimeCommands();
 	void _endSingleTimeCommands(vk::CommandBuffer commandBuffer);
 
-	void _copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
-	void _sendToBuffer(vk::Buffer dstBuffer, uint8_t *data, size_t size);
+	AllocatedBuffer _bufferCreate(
+			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
 
-	MeshInstance _uploadMesh(const Mesh *pMesh);
+	void _bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
 
-	void _updateUniformBuffer(const Camera *pCamera);
+	void _bufferSend(vk::Buffer dstBuffer, uint8_t *data, size_t size);
 
 public:
-	void createMeshInstance(const Mesh *pMesh, const glm::mat4 &transform);
-	void createPointLight(const PointLight *pPointLight, const glm::vec3 &position);
-	void createCamera(const glm::mat4 transform, float fovY, float zNear, float zFar);
+	void init(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void windowResize(uint32_t width, uint32_t height);
 
-	void draw();
+	Mesh meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
+	void meshDestroy(Mesh &mesh);
 
-	void createWindow(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
-	void resizeWindow(uint32_t width, uint32_t height);
+	void updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view, uint32_t lightCount);
+	void updateLightBuffer(LightData *lights, uint64_t lightCount);
 
-	vk::Instance getInstance();
+	vk::Instance getInstance() const;
+	vk::PipelineLayout getPipelineLayout() const;
 
-	RenderingDevice(std::vector<const char *> extensions, bool useValidation);
+	vk::CommandBuffer drawBegin();
+	void drawEnd(vk::CommandBuffer commandBuffer);
+
+	RenderingDevice(bool useValidation);
 };
 
 #endif // !RENDERING_DEVICE_H

@@ -5,12 +5,16 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/matrix.hpp>
 
+#include <stdexcept>
 #include <vulkan/vulkan_core.h>
+
+#include <SDL2/SDL_vulkan.h>
 
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
 
-#include "scene.h"
+#include "vertex.h"
+#include "vk_types.h"
 
 #include "rendering_device.h"
 
@@ -19,25 +23,6 @@ vk::ShaderModule createShaderModule(vk::Device device, const uint32_t *pCode, si
 			vk::ShaderModuleCreateInfo().setPCode(pCode).setCodeSize(size);
 
 	return device.createShaderModule(createInfo);
-}
-
-AllocatedBuffer createBuffer(VmaAllocator allocator, vk::DeviceSize size,
-		vk::BufferUsageFlags usage, VmaAllocationInfo &allocInfo) {
-	VkBufferCreateInfo createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	createInfo.size = size;
-	createInfo.usage = static_cast<VkBufferUsageFlags>(usage);
-
-	VmaAllocationCreateInfo allocCreateInfo{};
-	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-			VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-	VkBuffer buffer;
-	VmaAllocation allocation;
-	vmaCreateBuffer(allocator, &createInfo, &allocCreateInfo, &buffer, &allocation, &allocInfo);
-
-	return AllocatedBuffer{ allocation, buffer };
 }
 
 void updateInputAttachment(vk::Device device, vk::ImageView imageView, vk::DescriptorSet dstSet) {
@@ -177,7 +162,34 @@ void RenderingDevice::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
 	_pContext->device.freeCommandBuffers(_pContext->commandPool, commandBuffer);
 }
 
-void RenderingDevice::_copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
+AllocatedBuffer RenderingDevice::_bufferCreate(
+		vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo) {
+	VkBufferCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	createInfo.size = size;
+	createInfo.usage = static_cast<VkBufferUsageFlags>(usage);
+
+	VmaAllocationCreateInfo allocCreateInfo{};
+	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+			VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+	VkBuffer buffer;
+	VmaAllocation allocation;
+
+	if (pAllocInfo == nullptr) {
+		VmaAllocationInfo _allocInfo;
+		vmaCreateBuffer(
+				_allocator, &createInfo, &allocCreateInfo, &buffer, &allocation, &_allocInfo);
+	} else {
+		vmaCreateBuffer(
+				_allocator, &createInfo, &allocCreateInfo, &buffer, &allocation, pAllocInfo);
+	}
+
+	return AllocatedBuffer{ allocation, buffer };
+}
+
+void RenderingDevice::_bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
 	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
 
 	vk::BufferCopy bufferCopy = vk::BufferCopy().setSrcOffset(0).setDstOffset(0).setSize(size);
@@ -186,121 +198,89 @@ void RenderingDevice::_copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk
 	_endSingleTimeCommands(commandBuffer);
 }
 
-void RenderingDevice::_sendToBuffer(vk::Buffer dstBuffer, uint8_t *data, size_t size) {
+void RenderingDevice::_bufferSend(vk::Buffer dstBuffer, uint8_t *data, size_t size) {
 	VmaAllocationInfo stagingAllocInfo;
 	AllocatedBuffer stagingBuffer =
-			createBuffer(_allocator, size, vk::BufferUsageFlagBits::eTransferSrc, stagingAllocInfo);
+			_bufferCreate(vk::BufferUsageFlagBits::eTransferSrc, size, &stagingAllocInfo);
 
 	memcpy(stagingAllocInfo.pMappedData, data, size);
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
-	_copyBuffer(stagingBuffer.buffer, dstBuffer, size);
+	_bufferCopy(stagingBuffer.buffer, dstBuffer, size);
 
 	vmaDestroyBuffer(_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
 }
 
-MeshInstance RenderingDevice::_uploadMesh(const Mesh *pMesh) {
-	AllocatedBuffer vertexBuffer;
-	AllocatedBuffer indexBuffer;
+Mesh RenderingDevice::meshCreate(
+		const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
+	vk::DeviceSize vertexSize = sizeof(Vertex) * vertices.size();
+	AllocatedBuffer vertexBuffer = _bufferCreate(
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			vertexSize);
+	_bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexSize);
 
-	{
-		vk::DeviceSize bufferSize = sizeof(Vertex) * pMesh->vertices.size();
+	vk::DeviceSize indexSize = sizeof(uint32_t) * indices.size();
+	AllocatedBuffer indexBuffer = _bufferCreate(
+			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			indexSize);
+	_bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexSize);
 
-		VmaAllocationInfo allocInfo;
-		vertexBuffer = createBuffer(_allocator, bufferSize,
-				vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
-				allocInfo);
+	Mesh mesh{};
+	mesh.vertexBuffer = vertexBuffer;
+	mesh.indexBuffer = indexBuffer;
+	mesh.indexCount = static_cast<uint32_t>(indices.size());
 
-		_sendToBuffer(vertexBuffer.buffer, (uint8_t *)pMesh->vertices.data(), (size_t)bufferSize);
-	}
-
-	{
-		vk::DeviceSize bufferSize = sizeof(uint32_t) * pMesh->indices.size();
-
-		VmaAllocationInfo allocInfo;
-		indexBuffer = createBuffer(_allocator, bufferSize,
-				vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
-				allocInfo);
-
-		_sendToBuffer(indexBuffer.buffer, (uint8_t *)pMesh->indices.data(), (size_t)bufferSize);
-	}
-
-	return MeshInstance{ vertexBuffer, indexBuffer, static_cast<uint32_t>(pMesh->indices.size()) };
+	return mesh;
 }
 
-void RenderingDevice::_updateUniformBuffer(const Camera *pCamera) {
-	vk::Extent2D extent = _pContext->swapchainExtent;
-	float aspect = (float)extent.width / (float)extent.height;
+void RenderingDevice::meshDestroy(Mesh &mesh) {
+	vmaDestroyBuffer(_allocator, mesh.vertexBuffer.buffer, mesh.vertexBuffer.allocation);
+	vmaDestroyBuffer(_allocator, mesh.indexBuffer.buffer, mesh.indexBuffer.allocation);
 
-	glm::mat4 view = pCamera->viewMatrix();
-	glm::mat4 projView = pCamera->projectionMatrix(aspect) * view;
+	mesh.vertexBuffer = AllocatedBuffer{};
+	mesh.indexBuffer = AllocatedBuffer{};
+	mesh.indexCount = 0;
+}
 
-	UniformBufferObject ubo = { projView, view, static_cast<uint32_t>(_lights.size()) };
+void RenderingDevice::updateUniformBuffer(
+		const glm::mat4 &proj, const glm::mat4 &view, uint32_t lightCount) {
+	UniformBufferObject ubo{};
+	ubo.projView = proj * view;
+	ubo.view = view;
+	ubo.lightCount = lightCount;
+
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }
 
-void RenderingDevice::createMeshInstance(const Mesh *pMesh, const glm::mat4 &transform) {
-	MeshInstance meshInstance = _uploadMesh(pMesh);
-	meshInstance.transform = transform;
-
-	_meshInstances.push_back(meshInstance);
+void RenderingDevice::updateLightBuffer(LightData *lights, uint64_t lightCount) {
+	_bufferSend(_lightBuffer.buffer, (uint8_t *)lights, sizeof(LightData) * MAX_LIGHT_COUNT);
 }
 
-void RenderingDevice::createPointLight(const PointLight *pPointLight, const glm::vec3 &position) {
-	if (_lights.size() >= MAX_LIGHT_COUNT) {
-		printf("Light limit of: %d exceeded!\n", MAX_LIGHT_COUNT);
-		return;
-	}
+vk::Instance RenderingDevice::getInstance() const { return _pContext->instance; }
 
-	LightData light{};
-	light.position = position;
-	light.range = pPointLight->range;
-	light.color = pPointLight->color;
-	light.intensity = pPointLight->intensity;
+vk::PipelineLayout RenderingDevice::getPipelineLayout() const { return _materialLayout; }
 
-	_lights.push_back(light);
-
-	_sendToBuffer(
-			_lightBuffer.buffer, (uint8_t *)_lights.data(), sizeof(LightData) * MAX_LIGHT_COUNT);
-}
-
-void RenderingDevice::createCamera(const glm::mat4 transform, float fovY, float zNear, float zFar) {
-	if (_pCamera != nullptr)
-		free(_pCamera);
-
-	Camera *pCamera = new Camera();
-	pCamera->transform = transform;
-	pCamera->fovY = fovY;
-	pCamera->zNear = zNear;
-	pCamera->zFar = zFar;
-
-	_pCamera = pCamera;
-}
-
-void RenderingDevice::draw() {
-	vk::Device device = _pContext->device;
+vk::CommandBuffer RenderingDevice::drawBegin() {
 	vk::CommandBuffer commandBuffer = _commandBuffers[_frame];
 
-	vk::Result result = device.waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
+	vk::Result result = _pContext->device.waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
 
 	if (result != vk::Result::eSuccess) {
 		printf("Device failed to wait for fences!\n");
 	}
 
-	vk::ResultValue<uint32_t> image = device.acquireNextImageKHR(
+	vk::ResultValue<uint32_t> image = _pContext->device.acquireNextImageKHR(
 			_pContext->swapchain, UINT64_MAX, _presentSemaphores[_frame], VK_NULL_HANDLE);
 
-	uint32_t imageIndex = image.value;
+	_imageIndex = image.value;
 
 	if (image.result == vk::Result::eErrorOutOfDateKHR) {
 		_pContext->recreateSwapchain(_width, _height);
-		updateInputAttachment(device, _pContext->colorView, _inputAttachmentSet);
+		updateInputAttachment(_pContext->device, _pContext->colorView, _inputAttachmentSet);
 	} else if (image.result != vk::Result::eSuccess && image.result != vk::Result::eSuboptimalKHR) {
 		printf("Failed to acquire swapchain image!");
 	}
 
-	_updateUniformBuffer(_pCamera);
-
-	device.resetFences(_fences[_frame]);
+	_pContext->device.resetFences(_fences[_frame]);
 
 	commandBuffer.reset();
 
@@ -328,7 +308,7 @@ void RenderingDevice::draw() {
 	vk::RenderPassBeginInfo renderPassInfo =
 			vk::RenderPassBeginInfo()
 					.setRenderPass(_pContext->renderPass)
-					.setFramebuffer(_pContext->swapchainImages[imageIndex].framebuffer)
+					.setFramebuffer(_pContext->swapchainImages[_imageIndex.value()].framebuffer)
 					.setRenderArea(vk::Rect2D{ { 0, 0 }, extent })
 					.setClearValues(clearValues);
 
@@ -338,26 +318,17 @@ void RenderingDevice::draw() {
 	commandBuffer.setScissor(0, scissor);
 
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _materialPipeline);
-	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, _materialLayout, 0,
-			{ _uniformSets[_frame], _lightSet }, {});
 
-	glm::mat4 view = _pCamera->viewMatrix();
+	std::array<vk::DescriptorSet, 2> descriptorSets = { _uniformSets[_frame], _lightSet };
+	commandBuffer.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics, _materialLayout, 0, descriptorSets, nullptr);
 
-	// draw geometry
-	for (const MeshInstance &meshInstance : _meshInstances) {
-		glm::mat4 modelView = meshInstance.transform * view;
+	return commandBuffer;
+}
 
-		MeshPushConstants constants{};
-		constants.model = meshInstance.transform;
-		constants.modelViewNormal = glm::transpose(glm::inverse(modelView));
-
-		commandBuffer.pushConstants(_materialLayout, vk::ShaderStageFlagBits::eVertex, 0,
-				sizeof(MeshPushConstants), &constants);
-
-		vk::DeviceSize offset = 0;
-		commandBuffer.bindVertexBuffers(0, 1, &meshInstance.vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(meshInstance.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-		commandBuffer.drawIndexed(meshInstance.indexCount, 1, 0, 0, 0);
+void RenderingDevice::drawEnd(vk::CommandBuffer commandBuffer) {
+	if (!_imageIndex.has_value()) {
+		throw std::runtime_error("Called drawEnd(), without calling drawBegin() first!");
 	}
 
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
@@ -389,23 +360,24 @@ void RenderingDevice::draw() {
 	vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
 											 .setWaitSemaphores(_renderSemaphores[_frame])
 											 .setSwapchains(_pContext->swapchain)
-											 .setImageIndices(imageIndex);
+											 .setImageIndices(_imageIndex.value());
 
 	vk::Result err = _pContext->presentQueue.presentKHR(presentInfo);
 
 	if (err == vk::Result::eErrorOutOfDateKHR || err == vk::Result::eSuboptimalKHR || _resized) {
 		_pContext->recreateSwapchain(_width, _height);
-		updateInputAttachment(device, _pContext->colorView, _inputAttachmentSet);
+		updateInputAttachment(_pContext->device, _pContext->colorView, _inputAttachmentSet);
 
 		_resized = false;
 	} else if (err != vk::Result::eSuccess) {
 		printf("Failed to present swapchain image!\n");
 	}
 
+	_imageIndex.reset();
 	_frame = (_frame + 1) % FRAMES_IN_FLIGHT;
 }
 
-void RenderingDevice::createWindow(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
+void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_pContext->initialize(surface, width, height);
 
 	// allocator
@@ -499,9 +471,9 @@ void RenderingDevice::createWindow(vk::SurfaceKHR surface, uint32_t width, uint3
 		}
 
 		for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-			_uniformBuffers[i] = createBuffer(_allocator, sizeof(UniformBufferObject),
+			_uniformBuffers[i] = _bufferCreate(
 					vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
-					_uniformAllocInfos[i]);
+					sizeof(UniformBufferObject), &_uniformAllocInfos[i]);
 
 			_uniformSets[i] = uniformSets[i];
 
@@ -587,17 +559,16 @@ void RenderingDevice::createWindow(vk::SurfaceKHR surface, uint32_t width, uint3
 			printf("Failed to allocate light set!\n");
 		}
 
-		vk::DeviceSize lightBufferSize = sizeof(LightData) * MAX_LIGHT_COUNT;
+		vk::DeviceSize bufferSize = sizeof(LightData) * MAX_LIGHT_COUNT;
 
-		VmaAllocationInfo _allocInfo;
-		_lightBuffer = createBuffer(_allocator, lightBufferSize,
+		_lightBuffer = _bufferCreate(
 				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-				_allocInfo);
+				bufferSize);
 
 		vk::DescriptorBufferInfo bufferInfo = vk::DescriptorBufferInfo()
 													  .setBuffer(_lightBuffer.buffer)
 													  .setOffset(0)
-													  .setRange(lightBufferSize);
+													  .setRange(bufferSize);
 
 		vk::WriteDescriptorSet writeInfo =
 				vk::WriteDescriptorSet()
@@ -671,7 +642,7 @@ void RenderingDevice::createWindow(vk::SurfaceKHR surface, uint32_t width, uint3
 	}
 }
 
-void RenderingDevice::resizeWindow(uint32_t width, uint32_t height) {
+void RenderingDevice::windowResize(uint32_t width, uint32_t height) {
 	if (_width == width && _height == height) {
 		return;
 	}
@@ -681,8 +652,17 @@ void RenderingDevice::resizeWindow(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-vk::Instance RenderingDevice::getInstance() { return _pContext->instance; }
+std::vector<const char *> getRequiredExtensions() {
+	uint32_t extensionCount = 0;
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
 
-RenderingDevice::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {
+	std::vector<const char *> extensions(extensionCount);
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+
+	return extensions;
+}
+
+RenderingDevice::RenderingDevice(bool useValidation) {
+	std::vector<const char *> extensions = getRequiredExtensions();
 	_pContext = new VulkanContext(extensions, useValidation);
 }

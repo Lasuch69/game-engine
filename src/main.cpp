@@ -10,41 +10,60 @@
 
 #include <version.h>
 
-#include "rendering/rendering_device.h"
+#include "rendering/rendering_server.h"
 
 #include "loader.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-std::vector<const char *> getRequiredExtensions() {
-	uint32_t extensionCount = 0;
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
+struct MeshInstance {
+	MeshID mesh;
+	glm::mat4 transform;
+};
 
-	std::vector<const char *> extensions(extensionCount);
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+std::vector<MeshInstance> load(std::filesystem::path path, RS *pRS) {
+	std::vector<Loader::Node> nodes = Loader::loadScene(path);
 
-	return extensions;
-}
+	std::vector<MeshInstance> meshInstances;
 
-void load(std::filesystem::path path, RenderingDevice *pRenderingDevice) {
-	std::vector<Node> nodes = Loader::loadScene(path);
-
-	for (const Node &node : nodes) {
+	for (const Loader::Node &node : nodes) {
 		bool hasCamera = node.camera.has_value();
-		if (hasCamera)
-			pRenderingDevice->createCamera(node.transform, glm::degrees(node.camera->yfov),
-					node.camera->znear, node.camera->zfar.value_or(100.0f));
+		if (hasCamera) {
+			Loader::Camera camera = node.camera.value();
+			pRS->cameraSetTransform(node.transform);
+			pRS->cameraSetFovY(camera.fovY);
+			pRS->cameraSetZNear(camera.zNear);
+			pRS->cameraSetZFar(camera.zFar);
+		}
 
 		bool hasMesh = node.mesh.has_value();
-		if (hasMesh)
-			pRenderingDevice->createMeshInstance(&node.mesh.value(), node.transform);
+		if (hasMesh) {
+			Loader::Mesh mesh = node.mesh.value();
+			MeshID meshID = pRS->meshCreate(mesh.vertices, mesh.indices);
 
-		bool hasPointLight = node.pointLight.has_value();
-		if (hasPointLight)
-			pRenderingDevice->createPointLight(
-					&node.pointLight.value(), glm::vec3(node.transform[3]));
+			MeshInstance meshInstance{};
+			meshInstance.mesh = meshID;
+			meshInstance.transform = node.transform;
+
+			meshInstances.push_back(meshInstance);
+		}
+
+		bool hasLight = node.pointLight.has_value();
+		if (hasLight) {
+			Loader::PointLight light = node.pointLight.value();
+
+			glm::vec3 position = glm::vec3(node.transform[3]);
+
+			LightID lightID = pRS->lightCreate();
+			pRS->lightSetPosition(lightID, position);
+			pRS->lightSetRange(lightID, light.range);
+			pRS->lightSetColor(lightID, light.color);
+			pRS->lightSetIntensity(lightID, light.intensity);
+		}
 	}
+
+	return meshInstances;
 }
 
 int main(int argc, char *argv[]) {
@@ -62,20 +81,9 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	RenderingDevice *pRenderingDevice = new RenderingDevice(getRequiredExtensions(), true);
+	RS *pRS = new RS(pWindow);
 
-	VkSurfaceKHR surface;
-	SDL_bool result = SDL_Vulkan_CreateSurface(pWindow, pRenderingDevice->getInstance(), &surface);
-
-	if (result == SDL_FALSE) {
-		SDL_LogCritical(SDL_LOG_CATEGORY_VIDEO, "Failed to create surface!\n");
-		return EXIT_FAILURE;
-	}
-
-	int width, height;
-	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-	pRenderingDevice->createWindow(static_cast<vk::SurfaceKHR>(surface),
-			static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+	std::vector<MeshInstance> meshInstances;
 
 	bool quit = false;
 	while (!quit) {
@@ -84,25 +92,18 @@ int main(int argc, char *argv[]) {
 			if (event.type == SDL_QUIT) {
 				quit = true;
 			}
-			if (event.type == SDL_WINDOWEVENT) {
-				switch (event.window.event) {
-					case SDL_WINDOWEVENT_RESIZED:
-						int width, height;
-						SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-						pRenderingDevice->resizeWindow(width, height);
-						break;
-					default:
-						break;
-				}
-			}
 			if (event.type == SDL_DROPFILE) {
 				char *pFile = event.drop.file;
-				load(pFile, pRenderingDevice);
+				meshInstances = load(pFile, pRS);
 				SDL_free(pFile);
 			}
 		}
 
-		pRenderingDevice->draw();
+		for (const MeshInstance &meshInstance : meshInstances) {
+			pRS->drawMesh(meshInstance.mesh, meshInstance.transform);
+		}
+
+		pRS->submit();
 	}
 
 	SDL_DestroyWindow(pWindow);

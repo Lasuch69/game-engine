@@ -12,7 +12,7 @@ glm::mat4 Camera::viewMatrix() const {
 }
 
 glm::mat4 Camera::projectionMatrix(float aspect) const {
-	glm::mat4 projection = glm::perspective(glm::radians(fovY), aspect, zNear, zFar);
+	glm::mat4 projection = glm::perspective(fovY, aspect, zNear, zFar);
 	projection[1][1] *= -1;
 
 	return projection;

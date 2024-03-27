@@ -9,7 +9,10 @@ const glm::vec3 CAMERA_FRONT = glm::vec3(0.0f, 0.0f, -1.0f);
 class Camera {
 public:
 	glm::mat4 transform = glm::mat4(1.0f);
-	float fovY = 60.0f;
+
+	// in radians
+	float fovY = glm::radians(60.0f);
+
 	float zNear = 0.1f;
 	float zFar = 100.0f;
 

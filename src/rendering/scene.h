@@ -13,7 +13,6 @@ struct Mesh {
 
 struct PointLight {
 	glm::vec3 color;
-
 	float intensity;
 	float range;
 };

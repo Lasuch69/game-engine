@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "rendering/vertex.h"
+#include "rendering/types/vertex.h"
 
 namespace Loader {
 

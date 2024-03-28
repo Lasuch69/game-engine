@@ -2,6 +2,7 @@
 #define VULKAN_CONTEXT_H
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <vulkan/vulkan.hpp>
@@ -9,6 +10,19 @@
 const std::vector<const char *> validationLayers = { "VK_LAYER_KHRONOS_validation" };
 
 const std::vector<const char *> deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+struct QueueFamilyIndices {
+	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
+
+	bool isComplete() { return graphicsFamily.has_value() && presentFamily.has_value(); }
+};
+
+struct SwapchainSupportDetails {
+	vk::SurfaceCapabilitiesKHR capabilities;
+	std::vector<vk::SurfaceFormatKHR> formats;
+	std::vector<vk::PresentModeKHR> presentModes;
+};
 
 class VulkanContext {
 private:

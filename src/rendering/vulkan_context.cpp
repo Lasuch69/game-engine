@@ -5,7 +5,6 @@
 #include <set>
 #include <string>
 
-#include "vk_types.h"
 #include "vulkan_context.h"
 
 #include <version.h>

@@ -11,7 +11,6 @@
 
 #include "camera.h"
 #include "rendering_device.h"
-#include "vertex.h"
 
 typedef uint64_t MeshID;
 typedef uint64_t MeshInstanceID;

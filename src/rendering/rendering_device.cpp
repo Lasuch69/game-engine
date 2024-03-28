@@ -13,9 +13,6 @@
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
 
-#include "vertex.h"
-#include "vk_types.h"
-
 #include "rendering_device.h"
 
 vk::ShaderModule createShaderModule(vk::Device device, const uint32_t *pCode, size_t size) {

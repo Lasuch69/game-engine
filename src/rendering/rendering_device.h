@@ -6,8 +6,9 @@
 
 #include <glm/glm.hpp>
 
-#include "vertex.h"
-#include "vk_types.h"
+#include "types/allocated.h"
+#include "types/vertex.h"
+
 #include "vulkan_context.h"
 
 const int FRAMES_IN_FLIGHT = 2;

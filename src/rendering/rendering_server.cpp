@@ -97,7 +97,7 @@ void RS::submit() {
 	glm::mat4 proj = _camera.projectionMatrix(aspect);
 	glm::mat4 view = _camera.viewMatrix();
 
-	_pDevice->updateUniformBuffer(proj, view, _lights.count());
+	_pDevice->updateUniformBuffer(proj, view, _lights.size());
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 

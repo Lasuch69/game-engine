@@ -27,14 +27,7 @@ public:
 		return iter != _map.end();
 	}
 
-	uint64_t count() const {
-		uint64_t count = 0;
-		for (const auto &[id, _] : _map) {
-			count++;
-		}
-
-		return count;
-	}
+	uint64_t size() const { return _map.size(); }
 
 	// returned value needs to be cleaned
 	std::optional<Value> remove(uint64_t id) {

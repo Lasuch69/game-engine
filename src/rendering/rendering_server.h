@@ -14,7 +14,13 @@
 #include "vertex.h"
 
 typedef uint64_t MeshID;
+typedef uint64_t MeshInstanceID;
 typedef uint64_t LightID;
+
+struct MeshInstance {
+	MeshID mesh;
+	glm::mat4 transform;
+};
 
 class RenderingServer {
 private:
@@ -23,9 +29,8 @@ private:
 
 	Camera _camera;
 	RIDOwner<Mesh> _meshes;
+	RIDOwner<MeshInstance> _meshInstances;
 	RIDOwner<LightData> _lights;
-
-	std::vector<std::tuple<MeshID, glm::mat4>> _drawQueue;
 
 	void _updateLights();
 
@@ -38,6 +43,11 @@ public:
 	MeshID meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
 	void meshFree(MeshID meshID);
 
+	MeshID meshInstanceCreate();
+	void meshInstanceSetMesh(MeshInstanceID meshInstanceID, MeshID meshID);
+	void meshInstanceSetTransform(MeshInstanceID meshInstanceID, const glm::mat4 &transform);
+	void meshInstanceFree(MeshInstanceID meshInstanceID);
+
 	LightID lightCreate();
 	void lightSetPosition(LightID lightID, const glm::vec3 &position);
 	void lightSetRange(LightID lightID, float range);
@@ -45,8 +55,7 @@ public:
 	void lightSetIntensity(LightID lightID, float intensity);
 	void lightFree(LightID lightID);
 
-	void drawMesh(MeshID meshID, const glm::mat4 &transform);
-	void submit();
+	void draw();
 
 	RenderingServer(SDL_Window *pWindow);
 };

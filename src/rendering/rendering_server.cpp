@@ -48,6 +48,27 @@ void RS::meshFree(MeshID meshID) {
 	_pDevice->meshDestroy(mesh);
 }
 
+MeshID RS::meshInstanceCreate() {
+	MeshInstance meshInstance{};
+	return _meshInstances.insert(meshInstance);
+}
+
+void RS::meshInstanceSetMesh(MeshInstanceID meshInstanceID, MeshID meshID) {
+	CHECK_ID(_meshInstances, meshInstanceID, "Could not set mesh instance mesh!");
+	CHECK_ID(_meshes, meshID, "Could not set mesh instance mesh!");
+	_meshInstances[meshInstanceID].mesh = meshID;
+}
+
+void RS::meshInstanceSetTransform(MeshInstanceID meshInstanceID, const glm::mat4 &transform) {
+	CHECK_ID(_meshInstances, meshInstanceID, "Could not set mesh instance transform!");
+	_meshInstances[meshInstanceID].transform = transform;
+}
+
+void RS::meshInstanceFree(MeshInstanceID meshInstanceID) {
+	CHECK_ID(_meshInstances, meshInstanceID, "Could not free mesh instance!");
+	_meshInstances.remove(meshInstanceID);
+}
+
 LightID RS::lightCreate() {
 	LightData light{};
 
@@ -87,12 +108,7 @@ void RS::lightFree(LightID lightID) {
 	_updateLights();
 }
 
-void RS::drawMesh(MeshID meshID, const glm::mat4 &transform) {
-	CHECK_ID(_meshes, meshID, "Could not draw mesh!")
-	_drawQueue.push_back(std::tuple<MeshID, glm::mat4>(meshID, transform));
-}
-
-void RS::submit() {
+void RS::draw() {
 	int width, height;
 	SDL_Vulkan_GetDrawableSize(_pWindow, &width, &height);
 
@@ -107,13 +123,13 @@ void RS::submit() {
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
-	for (const auto &[meshID, transform] : _drawQueue) {
-		const Mesh &mesh = _meshes[meshID];
+	for (const auto &[meshInstanceID, meshInstance] : _meshInstances.map()) {
+		const Mesh &mesh = _meshes[meshInstance.mesh];
 
-		glm::mat4 modelView = transform * view;
+		glm::mat4 modelView = meshInstance.transform * view;
 
 		MeshPushConstants constants{};
-		constants.model = transform;
+		constants.model = meshInstance.transform;
 		constants.modelViewNormal = glm::transpose(glm::inverse(modelView));
 
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
@@ -126,8 +142,6 @@ void RS::submit() {
 	}
 
 	_pDevice->drawEnd(commandBuffer);
-
-	_drawQueue.clear();
 }
 
 RS::RenderingServer(SDL_Window *pWindow) {

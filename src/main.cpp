@@ -17,15 +17,8 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-struct MeshInstance {
-	MeshID mesh;
-	glm::mat4 transform;
-};
-
-std::vector<MeshInstance> load(std::filesystem::path path, RS *pRS) {
+void load(std::filesystem::path path, RS *pRS) {
 	std::vector<Loader::Node> nodes = Loader::loadScene(path);
-
-	std::vector<MeshInstance> meshInstances;
 
 	for (const Loader::Node &node : nodes) {
 		bool hasCamera = node.camera.has_value();
@@ -42,11 +35,9 @@ std::vector<MeshInstance> load(std::filesystem::path path, RS *pRS) {
 			Loader::Mesh mesh = node.mesh.value();
 			MeshID meshID = pRS->meshCreate(mesh.vertices, mesh.indices);
 
-			MeshInstance meshInstance{};
-			meshInstance.mesh = meshID;
-			meshInstance.transform = node.transform;
-
-			meshInstances.push_back(meshInstance);
+			MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
+			pRS->meshInstanceSetMesh(meshInstanceID, meshID);
+			pRS->meshInstanceSetTransform(meshInstanceID, node.transform);
 		}
 
 		bool hasLight = node.pointLight.has_value();
@@ -62,8 +53,6 @@ std::vector<MeshInstance> load(std::filesystem::path path, RS *pRS) {
 			pRS->lightSetIntensity(lightID, light.intensity);
 		}
 	}
-
-	return meshInstances;
 }
 
 int main(int argc, char *argv[]) {
@@ -94,16 +83,12 @@ int main(int argc, char *argv[]) {
 			}
 			if (event.type == SDL_DROPFILE) {
 				char *pFile = event.drop.file;
-				meshInstances = load(pFile, pRS);
+				load(pFile, pRS);
 				SDL_free(pFile);
 			}
 		}
 
-		for (const MeshInstance &meshInstance : meshInstances) {
-			pRS->drawMesh(meshInstance.mesh, meshInstance.transform);
-		}
-
-		pRS->submit();
+		pRS->draw();
 	}
 
 	SDL_DestroyWindow(pWindow);

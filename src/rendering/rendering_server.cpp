@@ -14,6 +14,12 @@
 	}
 
 void RS::_updateLights() {
+	if (_lights.size() == 0) {
+		LightData light{};
+		_pDevice->updateLightBuffer(&light, 1);
+		return;
+	}
+
 	std::vector<LightData> lights;
 
 	for (const auto &[id, light] : _lights.map()) {

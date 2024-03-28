@@ -1,12 +1,17 @@
 #include <cstdint>
 
-#include <SDL2/SDL_log.h>
 #include <SDL2/SDL_vulkan.h>
 
 #include <glm/glm.hpp>
 
 #include "rendering_device.h"
 #include "rendering_server.h"
+
+#define CHECK_ID(owner, id, msg)                                                                   \
+	if (!owner.has(id)) {                                                                          \
+		printf("ERROR: %s ID: %ld is invalid.\n", msg, id);                                        \
+		return;                                                                                    \
+	}
 
 void RS::_updateLights() {
 	std::vector<LightData> lights;
@@ -32,11 +37,7 @@ MeshID RS::meshCreate(const std::vector<Vertex> &vertices, const std::vector<uin
 }
 
 void RS::meshFree(MeshID meshID) {
-	if (!_meshes.has(meshID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "MeshID: %ld, is invalid!\n", meshID);
-		return;
-	}
-
+	CHECK_ID(_meshes, meshID, "Could not free mesh!");
 	Mesh mesh = _meshes.remove(meshID).value();
 	_pDevice->meshDestroy(mesh);
 }
@@ -51,56 +52,37 @@ LightID RS::lightCreate() {
 }
 
 void RS::lightSetPosition(LightID lightID, const glm::vec3 &position) {
-	if (!_lights.has(lightID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "LightID: %ld, is invalid!\n", lightID);
-		return;
-	}
-
+	CHECK_ID(_lights, lightID, "Could not set light position!");
 	_lights[lightID].position = position;
 	_updateLights();
 }
 
 void RS::lightSetRange(LightID lightID, float range) {
-	if (!_lights.has(lightID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "LightID: %ld, is invalid!\n", lightID);
-		return;
-	}
-
+	CHECK_ID(_lights, lightID, "Could not set light range!");
 	_lights[lightID].range = range;
 	_updateLights();
 }
 
 void RS::lightSetColor(LightID lightID, const glm::vec3 &color) {
-	if (!_lights.has(lightID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "LightID: %ld, is invalid!\n", lightID);
-		return;
-	}
-
+	CHECK_ID(_lights, lightID, "Could not set light color!");
 	_lights[lightID].color = color;
 	_updateLights();
 }
 
 void RS::lightSetIntensity(LightID lightID, float intensity) {
-	if (!_lights.has(lightID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "LightID: %ld, is invalid!\n", lightID);
-		return;
-	}
-
+	CHECK_ID(_lights, lightID, "Could not set light intensity!");
 	_lights[lightID].intensity = intensity;
 	_updateLights();
 }
 
 void RS::lightFree(LightID lightID) {
-	if (!_lights.has(lightID)) {
-		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "LightID: %ld, is invalid!\n", lightID);
-		return;
-	}
-
+	CHECK_ID(_lights, lightID, "Could not free light!");
 	_lights.remove(lightID);
 	_updateLights();
 }
 
 void RS::drawMesh(MeshID meshID, const glm::mat4 &transform) {
+	CHECK_ID(_meshes, meshID, "Could not draw mesh!")
 	_drawQueue.push_back(std::tuple<MeshID, glm::mat4>(meshID, transform));
 }
 

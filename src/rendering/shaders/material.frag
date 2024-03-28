@@ -24,12 +24,12 @@ layout(location = 3) in vec2 inTexCoord;
 
 layout(location = 0) out vec4 fragColor;
 
-const vec3 ambientColor = vec3(0.025);
+const vec3 ambient = vec3(0.025);
 const vec3 specColor = vec3(1.0, 1.0, 1.0);
 const float shininess = 16.0;
 
 void main() {
-    vec3 finalColor = vec3(0.0);
+    vec3 finalColor = inColor * ambient;
 
     for (int i = 0; i < ubo.lightCount; i++) {
         // light position to view space
@@ -56,8 +56,7 @@ void main() {
             specular = pow(specAngle, shininess);
         }
 
-        vec3 light =
-            ambientColor + lambertian * lightColor * intensity / distance +
+        vec3 light = lambertian * lightColor * intensity / distance +
                 specColor * specular * lightColor * intensity / distance;
 
         finalColor += inColor * light;

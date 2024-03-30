@@ -17,40 +17,39 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-void load(std::filesystem::path path, RS *pRS) {
+void load(std::filesystem::path path, RenderingServer *pRS) {
 	std::vector<Loader::Node> nodes = Loader::loadScene(path);
 
 	for (const Loader::Node &node : nodes) {
 		bool hasCamera = node.camera.has_value();
 		if (hasCamera) {
-			Loader::Camera camera = node.camera.value();
+			Loader::Camera cameraData = node.camera.value();
+			pRS->cameraSetFovY(cameraData.fovY);
+			pRS->cameraSetZNear(cameraData.zNear);
+			pRS->cameraSetZFar(cameraData.zFar);
 			pRS->cameraSetTransform(node.transform);
-			pRS->cameraSetFovY(camera.fovY);
-			pRS->cameraSetZNear(camera.zNear);
-			pRS->cameraSetZFar(camera.zFar);
 		}
 
 		bool hasMesh = node.mesh.has_value();
 		if (hasMesh) {
-			Loader::Mesh mesh = node.mesh.value();
-			MeshID meshID = pRS->meshCreate(mesh.vertices, mesh.indices);
+			Loader::Mesh meshData = node.mesh.value();
+			RS::Mesh mesh = pRS->meshCreate(meshData.vertices, meshData.indices);
 
-			MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
-			pRS->meshInstanceSetMesh(meshInstanceID, meshID);
-			pRS->meshInstanceSetTransform(meshInstanceID, node.transform);
+			RS::MeshInstance meshInstance = pRS->meshInstanceCreate();
+			pRS->meshInstanceSetMesh(meshInstance, mesh);
+			pRS->meshInstanceSetTransform(meshInstance, node.transform);
 		}
 
 		bool hasLight = node.pointLight.has_value();
 		if (hasLight) {
-			Loader::PointLight light = node.pointLight.value();
-
+			Loader::PointLight lightData = node.pointLight.value();
 			glm::vec3 position = glm::vec3(node.transform[3]);
 
-			LightID lightID = pRS->lightCreate();
-			pRS->lightSetPosition(lightID, position);
-			pRS->lightSetRange(lightID, light.range);
-			pRS->lightSetColor(lightID, light.color);
-			pRS->lightSetIntensity(lightID, light.intensity);
+			RS::Light light = pRS->lightCreate();
+			pRS->lightSetPosition(light, position);
+			pRS->lightSetRange(light, lightData.range);
+			pRS->lightSetColor(light, lightData.color);
+			pRS->lightSetIntensity(light, lightData.intensity);
 		}
 	}
 }
@@ -70,7 +69,7 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	RS *pRS = new RS(pWindow);
+	RenderingServer *pRS = new RenderingServer(pWindow);
 
 	std::vector<MeshInstance> meshInstances;
 

@@ -7,7 +7,6 @@
 #include <glm/glm.hpp>
 
 #include "types/allocated.h"
-#include "types/vertex.h"
 
 #include "vulkan_context.h"
 
@@ -23,12 +22,6 @@ struct UniformBufferObject {
 struct MeshPushConstants {
 	glm::mat4 model;
 	glm::mat4 modelViewNormal;
-};
-
-struct Mesh {
-	AllocatedBuffer vertexBuffer;
-	AllocatedBuffer indexBuffer;
-	uint32_t indexCount;
 };
 
 struct LightData {
@@ -78,22 +71,15 @@ private:
 	vk::CommandBuffer _beginSingleTimeCommands();
 	void _endSingleTimeCommands(vk::CommandBuffer commandBuffer);
 
-	AllocatedBuffer _bufferCreate(
-			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
-
-	void _bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
-
-	void _bufferSend(vk::Buffer dstBuffer, uint8_t *data, size_t size);
-
 public:
-	void init(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
-	void windowResize(uint32_t width, uint32_t height);
-
-	Mesh meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
-	void meshDestroy(Mesh &mesh);
+	AllocatedBuffer bufferCreate(
+			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
+	void bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
+	void bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size);
+	void bufferDestroy(AllocatedBuffer buffer);
 
 	void updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view, uint32_t lightCount);
-	void updateLightBuffer(LightData *lights, uint64_t lightCount);
+	void updateLightBuffer(uint8_t *pData, size_t size);
 
 	vk::Instance getInstance() const;
 	vk::PipelineLayout getPipelineLayout() const;
@@ -101,7 +87,10 @@ public:
 	vk::CommandBuffer drawBegin();
 	void drawEnd(vk::CommandBuffer commandBuffer);
 
-	RenderingDevice(bool useValidation);
+	void init(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void windowResize(uint32_t width, uint32_t height);
+
+	RenderingDevice(const std::vector<const char *> extensions, bool useValidation);
 };
 
 #endif // !RENDERING_DEVICE_H

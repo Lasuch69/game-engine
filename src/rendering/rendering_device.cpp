@@ -1,17 +1,17 @@
 #include <cstdint>
 #include <cstdio>
+#include <stdexcept>
 
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/matrix.hpp>
 
-#include <stdexcept>
 #include <vulkan/vulkan_core.h>
-
-#include <SDL2/SDL_vulkan.h>
 
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
+
+#include "types/vertex.h"
 
 #include "rendering_device.h"
 
@@ -159,7 +159,7 @@ void RenderingDevice::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
 	_pContext->device.freeCommandBuffers(_pContext->commandPool, commandBuffer);
 }
 
-AllocatedBuffer RenderingDevice::_bufferCreate(
+AllocatedBuffer RenderingDevice::bufferCreate(
 		vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo) {
 	VkBufferCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -186,7 +186,7 @@ AllocatedBuffer RenderingDevice::_bufferCreate(
 	return AllocatedBuffer{ allocation, buffer };
 }
 
-void RenderingDevice::_bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
+void RenderingDevice::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
 	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
 
 	vk::BufferCopy bufferCopy = vk::BufferCopy().setSrcOffset(0).setDstOffset(0).setSize(size);
@@ -195,47 +195,20 @@ void RenderingDevice::_bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk
 	_endSingleTimeCommands(commandBuffer);
 }
 
-void RenderingDevice::_bufferSend(vk::Buffer dstBuffer, uint8_t *data, size_t size) {
+void RenderingDevice::bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size) {
 	VmaAllocationInfo stagingAllocInfo;
 	AllocatedBuffer stagingBuffer =
-			_bufferCreate(vk::BufferUsageFlagBits::eTransferSrc, size, &stagingAllocInfo);
+			bufferCreate(vk::BufferUsageFlagBits::eTransferSrc, size, &stagingAllocInfo);
 
-	memcpy(stagingAllocInfo.pMappedData, data, size);
+	memcpy(stagingAllocInfo.pMappedData, pData, size);
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
-	_bufferCopy(stagingBuffer.buffer, dstBuffer, size);
+	bufferCopy(stagingBuffer.buffer, dstBuffer, size);
 
 	vmaDestroyBuffer(_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
 }
 
-Mesh RenderingDevice::meshCreate(
-		const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
-	vk::DeviceSize vertexSize = sizeof(Vertex) * vertices.size();
-	AllocatedBuffer vertexBuffer = _bufferCreate(
-			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			vertexSize);
-	_bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexSize);
-
-	vk::DeviceSize indexSize = sizeof(uint32_t) * indices.size();
-	AllocatedBuffer indexBuffer = _bufferCreate(
-			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			indexSize);
-	_bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexSize);
-
-	Mesh mesh{};
-	mesh.vertexBuffer = vertexBuffer;
-	mesh.indexBuffer = indexBuffer;
-	mesh.indexCount = static_cast<uint32_t>(indices.size());
-
-	return mesh;
-}
-
-void RenderingDevice::meshDestroy(Mesh &mesh) {
-	vmaDestroyBuffer(_allocator, mesh.vertexBuffer.buffer, mesh.vertexBuffer.allocation);
-	vmaDestroyBuffer(_allocator, mesh.indexBuffer.buffer, mesh.indexBuffer.allocation);
-
-	mesh.vertexBuffer = AllocatedBuffer{};
-	mesh.indexBuffer = AllocatedBuffer{};
-	mesh.indexCount = 0;
+void RenderingDevice::bufferDestroy(AllocatedBuffer buffer) {
+	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
 }
 
 void RenderingDevice::updateUniformBuffer(
@@ -248,8 +221,8 @@ void RenderingDevice::updateUniformBuffer(
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }
 
-void RenderingDevice::updateLightBuffer(LightData *lights, uint64_t lightCount) {
-	_bufferSend(_lightBuffer.buffer, (uint8_t *)lights, sizeof(LightData) * MAX_LIGHT_COUNT);
+void RenderingDevice::updateLightBuffer(uint8_t *pData, size_t size) {
+	bufferSend(_lightBuffer.buffer, pData, size);
 }
 
 vk::Instance RenderingDevice::getInstance() const { return _pContext->instance; }
@@ -468,7 +441,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 		}
 
 		for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-			_uniformBuffers[i] = _bufferCreate(
+			_uniformBuffers[i] = bufferCreate(
 					vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst,
 					sizeof(UniformBufferObject), &_uniformAllocInfos[i]);
 
@@ -558,7 +531,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 		vk::DeviceSize bufferSize = sizeof(LightData) * MAX_LIGHT_COUNT;
 
-		_lightBuffer = _bufferCreate(
+		_lightBuffer = bufferCreate(
 				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
 				bufferSize);
 
@@ -649,17 +622,6 @@ void RenderingDevice::windowResize(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-std::vector<const char *> getRequiredExtensions() {
-	uint32_t extensionCount = 0;
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
-
-	std::vector<const char *> extensions(extensionCount);
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
-
-	return extensions;
-}
-
-RenderingDevice::RenderingDevice(bool useValidation) {
-	std::vector<const char *> extensions = getRequiredExtensions();
+RenderingDevice::RenderingDevice(const std::vector<const char *> extensions, bool useValidation) {
 	_pContext = new VulkanContext(extensions, useValidation);
 }

@@ -29,9 +29,9 @@ glm::mat4 getTransformMatrix(const fastgltf::Node &node, glm::mat4x4 &base) {
 		// layout, or you could use the recently added static factory constructor glm::quat::wxyz(w,
 		// x, y, z), which guarantees the parameter order.
 		return base *
-				glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
-				glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
-				glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
+			   glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
+			   glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
+			   glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
 	}
 
 	return base;
@@ -137,7 +137,7 @@ std::vector<Loader::Node> Loader::loadScene(std::filesystem::path path) {
 
 			float intensity = gltfLight.intensity;
 			intensity *= STERADIAN; // candela to lumen
-			intensity /= 1000; // lumen to arbitrary
+			intensity /= 1000;		// lumen to arbitrary
 
 			if (gltfLight.type == fastgltf::LightType::Point) {
 				float range = gltfLight.range.value_or(0.0f);

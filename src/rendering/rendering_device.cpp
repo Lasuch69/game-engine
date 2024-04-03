@@ -91,9 +91,9 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 
 	vk::PipelineColorBlendAttachmentState colorBlendAttachment =
 			vk::PipelineColorBlendAttachmentState()
-					.setColorWriteMask(vk::ColorComponentFlagBits::eR |
-							vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB |
-							vk::ColorComponentFlagBits::eA)
+					.setColorWriteMask(
+							vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+							vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA)
 					.setBlendEnable(VK_FALSE);
 
 	vk::PipelineColorBlendStateCreateInfo colorBlending =
@@ -169,7 +169,7 @@ AllocatedBuffer RenderingDevice::bufferCreate(
 	VmaAllocationCreateInfo allocCreateInfo{};
 	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
 	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-			VMA_ALLOCATION_CREATE_MAPPED_BIT;
+							VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
 	VkBuffer buffer;
 	VmaAllocation allocation;
@@ -225,9 +225,13 @@ void RenderingDevice::updateLightBuffer(uint8_t *pData, size_t size) {
 	bufferSend(_lightBuffer.buffer, pData, size);
 }
 
-vk::Instance RenderingDevice::getInstance() const { return _pContext->instance; }
+vk::Instance RenderingDevice::getInstance() const {
+	return _pContext->instance;
+}
 
-vk::PipelineLayout RenderingDevice::getPipelineLayout() const { return _materialLayout; }
+vk::PipelineLayout RenderingDevice::getPipelineLayout() const {
+	return _materialLayout;
+}
 
 vk::CommandBuffer RenderingDevice::drawBegin() {
 	vk::CommandBuffer commandBuffer = _commandBuffers[_frame];
@@ -413,7 +417,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 						.setDescriptorType(vk::DescriptorType::eUniformBuffer)
 						.setDescriptorCount(1)
 						.setStageFlags(vk::ShaderStageFlagBits::eVertex |
-								vk::ShaderStageFlagBits::eFragment);
+									   vk::ShaderStageFlagBits::eFragment);
 
 		vk::DescriptorSetLayoutCreateInfo createInfo =
 				vk::DescriptorSetLayoutCreateInfo().setBindings(binding);

@@ -3,9 +3,10 @@
 BasedOnStyle:  LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
-AlignOperands:   DontAlign
-AlignTrailingComments: false
+AlignOperands: Align
+AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: Empty
 BreakConstructorInitializers: AfterColon
 ColumnLimit:     100
 ConstructorInitializerIndentWidth: 8

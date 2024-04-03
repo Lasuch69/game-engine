@@ -11,9 +11,13 @@ private:
 	uint64_t _last = 0;
 
 public:
-	Value &operator[](uint64_t id) { return _map[id]; }
+	Value &operator[](uint64_t id) {
+		return _map[id];
+	}
 
-	std::unordered_map<uint64_t, Value> &map() { return _map; }
+	std::unordered_map<uint64_t, Value> &map() {
+		return _map;
+	}
 
 	uint64_t insert(Value value) {
 		_last++;
@@ -27,7 +31,9 @@ public:
 		return iter != _map.end();
 	}
 
-	uint64_t size() const { return _map.size(); }
+	uint64_t size() const {
+		return _map.size();
+	}
 
 	// returned value needs to be cleaned
 	std::optional<Value> remove(uint64_t id) {

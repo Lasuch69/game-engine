@@ -38,7 +38,11 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 
 	for (const Loader::MeshInstance &meshInstance : pGltf->meshInstances) {
 		Loader::Mesh mesh = pGltf->meshes[meshInstance.meshIndex];
-		MeshID meshID = pRS->meshCreate(mesh.primitives[0].vertices, mesh.primitives[0].indices);
+		MeshID meshID = pRS->meshCreate();
+
+		for (const Loader::Primitive &primitive : mesh.primitives) {
+			pRS->meshAddPrimitive(meshID, primitive.vertices, primitive.indices);
+		}
 
 		MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
 		pRS->meshInstanceSetMesh(meshInstanceID, meshID);

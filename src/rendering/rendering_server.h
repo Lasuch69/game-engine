@@ -20,10 +20,14 @@ typedef uint64_t PointLightID;
 
 class RenderingServer {
 private:
-	struct Mesh {
+	struct Primitive {
 		AllocatedBuffer vertexBuffer;
 		AllocatedBuffer indexBuffer;
 		uint32_t indexCount;
+	};
+
+	struct Mesh {
+		std::vector<Primitive> primitives;
 	};
 
 	struct MeshInstance {
@@ -47,7 +51,9 @@ public:
 	void cameraSetZNear(float zNear);
 	void cameraSetZFar(float zFar);
 
-	MeshID meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
+	MeshID meshCreate();
+	void meshAddPrimitive(
+			MeshID mesh, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
 	void meshFree(MeshID mesh);
 
 	MeshID meshInstanceCreate();

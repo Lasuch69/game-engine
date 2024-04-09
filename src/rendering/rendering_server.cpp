@@ -47,7 +47,14 @@ void RS::cameraSetZFar(float zFar) {
 	_camera.zFar = zFar;
 }
 
-MeshID RS::meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
+MeshID RS::meshCreate() {
+	return _meshes.insert({});
+}
+
+void RS::meshAddPrimitive(
+		MeshID mesh, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
+	CHECK_IF_VALID(_meshes, mesh, "Mesh");
+
 	vk::DeviceSize vertexSize = sizeof(Vertex) * vertices.size();
 	AllocatedBuffer vertexBuffer = _pDevice->bufferCreate(
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
@@ -60,17 +67,24 @@ MeshID RS::meshCreate(const std::vector<Vertex> &vertices, const std::vector<uin
 			indexSize);
 	_pDevice->bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexSize);
 
-	Mesh data = Mesh{ vertexBuffer, indexBuffer, static_cast<uint32_t>(indices.size()) };
+	Primitive primitive = {
+		vertexBuffer,
+		indexBuffer,
+		static_cast<uint32_t>(indices.size()),
+	};
 
-	return _meshes.insert(data);
+	_meshes[mesh].primitives.push_back(primitive);
 }
 
 void RS::meshFree(MeshID mesh) {
 	CHECK_IF_VALID(_meshes, mesh, "Mesh");
 
 	Mesh data = _meshes.remove(mesh).value();
-	_pDevice->bufferDestroy(data.vertexBuffer);
-	_pDevice->bufferDestroy(data.indexBuffer);
+
+	for (Primitive primitive : data.primitives) {
+		_pDevice->bufferDestroy(primitive.vertexBuffer);
+		_pDevice->bufferDestroy(primitive.indexBuffer);
+	}
 }
 
 MeshInstanceID RenderingServer::meshInstanceCreate() {
@@ -153,10 +167,13 @@ void RenderingServer::draw() {
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
 				0, sizeof(MeshPushConstants), &constants);
 
-		vk::DeviceSize offset = 0;
-		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
-		commandBuffer.bindIndexBuffer(mesh.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-		commandBuffer.drawIndexed(mesh.indexCount, 1, 0, 0, 0);
+		for (const Primitive &primitive : mesh.primitives) {
+			vk::DeviceSize offset = 0;
+
+			commandBuffer.bindVertexBuffers(0, 1, &primitive.vertexBuffer.buffer, &offset);
+			commandBuffer.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+			commandBuffer.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
+		}
 	}
 
 	_pDevice->drawEnd(commandBuffer);

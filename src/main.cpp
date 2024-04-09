@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <optional>
 #include <vector>
 
 #include <SDL2/SDL.h>
@@ -17,40 +18,60 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-void load(std::filesystem::path path, RenderingServer *pRS) {
-	std::vector<Loader::Node> nodes = Loader::loadScene(path);
+struct SceneData {
+	std::vector<RS::Mesh> meshes;
+	std::vector<RS::MeshInstance> meshInstances;
+	std::vector<RS::Light> lights;
+};
 
-	for (const Loader::Node &node : nodes) {
-		bool hasCamera = node.camera.has_value();
-		if (hasCamera) {
-			Loader::Camera cameraData = node.camera.value();
-			pRS->cameraSetFovY(cameraData.fovY);
-			pRS->cameraSetZNear(cameraData.zNear);
-			pRS->cameraSetZFar(cameraData.zFar);
-			pRS->cameraSetTransform(node.transform);
-		}
+SceneData load(std::filesystem::path path, RenderingServer *pRS) {
+	Loader::Gltf *pGltf = Loader::loadGltf(path);
 
-		bool hasMesh = node.mesh.has_value();
-		if (hasMesh) {
-			Loader::Mesh meshData = node.mesh.value();
-			RS::Mesh mesh = pRS->meshCreate(meshData.vertices, meshData.indices);
+	SceneData sceneData = {};
 
-			RS::MeshInstance meshInstance = pRS->meshInstanceCreate();
-			pRS->meshInstanceSetMesh(meshInstance, mesh);
-			pRS->meshInstanceSetTransform(meshInstance, node.transform);
-		}
+	for (const Loader::Camera &camera : pGltf->cameras) {
+		pRS->cameraSetTransform(camera.transform);
+		pRS->cameraSetFovY(camera.fovY);
+		pRS->cameraSetZNear(camera.zNear);
+		pRS->cameraSetZFar(camera.zFar);
+	}
 
-		bool hasLight = node.pointLight.has_value();
-		if (hasLight) {
-			Loader::PointLight lightData = node.pointLight.value();
-			glm::vec3 position = glm::vec3(node.transform[3]);
+	for (const Loader::MeshInstance &meshInstance : pGltf->meshInstances) {
+		Loader::Mesh mesh = pGltf->meshes[meshInstance.meshIndex];
+		RS::Mesh meshID = pRS->meshCreate(mesh.primitives[0].vertices, mesh.primitives[0].indices);
 
-			RS::Light light = pRS->lightCreate();
-			pRS->lightSetPosition(light, position);
-			pRS->lightSetRange(light, lightData.range);
-			pRS->lightSetColor(light, lightData.color);
-			pRS->lightSetIntensity(light, lightData.intensity);
-		}
+		RS::MeshInstance meshInstanceID = pRS->meshInstanceCreate();
+		pRS->meshInstanceSetMesh(meshInstanceID, meshID);
+		pRS->meshInstanceSetTransform(meshInstanceID, meshInstance.transform);
+
+		sceneData.meshes.push_back(meshID);
+		sceneData.meshInstances.push_back(meshInstanceID);
+	}
+
+	for (const Loader::PointLight &pointLight : pGltf->pointLights) {
+		RS::Light lightID = pRS->lightCreate();
+		pRS->lightSetPosition(lightID, pointLight.position);
+		pRS->lightSetRange(lightID, pointLight.range);
+		pRS->lightSetColor(lightID, pointLight.color);
+		pRS->lightSetIntensity(lightID, pointLight.intensity);
+
+		sceneData.lights.push_back(lightID);
+	}
+
+	return sceneData;
+}
+
+void clear(SceneData sceneData, RenderingServer *pRS) {
+	for (RS::MeshInstance meshInstance : sceneData.meshInstances) {
+		pRS->meshInstanceFree(meshInstance);
+	}
+
+	for (RS::Light light : sceneData.lights) {
+		pRS->lightFree(light);
+	}
+
+	for (RS::Mesh mesh : sceneData.meshes) {
+		pRS->meshFree(mesh);
 	}
 }
 
@@ -71,7 +92,7 @@ int main(int argc, char *argv[]) {
 
 	RenderingServer *pRS = new RenderingServer(pWindow);
 
-	std::vector<MeshInstance> meshInstances;
+	std::optional<SceneData> sceneData = {};
 
 	bool quit = false;
 	while (!quit) {
@@ -82,7 +103,15 @@ int main(int argc, char *argv[]) {
 			}
 			if (event.type == SDL_DROPFILE) {
 				char *pFile = event.drop.file;
-				load(pFile, pRS);
+
+				SceneData newScene = load(pFile, pRS);
+
+				if (sceneData.has_value()) {
+					clear(sceneData.value(), pRS);
+				}
+
+				sceneData = newScene;
+
 				SDL_free(pFile);
 			}
 		}

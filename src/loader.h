@@ -12,32 +12,50 @@
 namespace Loader {
 
 struct Camera {
+	std::string name;
+	glm::mat4 transform;
 	float fovY;
 	float zNear;
 	float zFar;
 };
 
-struct Mesh {
+struct Primitive {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
+	std::optional<size_t> materialIndex;
+};
+
+struct Mesh {
+	std::string name;
+	std::vector<Primitive> primitives;
+};
+
+struct MeshInstance {
+	std::string name;
+	glm::mat4 transform;
+	size_t meshIndex;
 };
 
 struct PointLight {
+	std::string name;
+	glm::vec3 position;
 	glm::vec3 color;
 	float intensity;
 	float range;
 };
 
-struct Node {
+struct Gltf {
 	std::string name;
 	glm::mat4 transform;
 
-	std::optional<Camera> camera;
-	std::optional<Mesh> mesh;
-	std::optional<PointLight> pointLight;
+	std::vector<Mesh> meshes;
+
+	std::vector<Camera> cameras;
+	std::vector<MeshInstance> meshInstances;
+	std::vector<PointLight> pointLights;
 };
 
-std::vector<Node> loadScene(std::filesystem::path path);
+Gltf *loadGltf(std::filesystem::path path);
 
 } // namespace Loader
 

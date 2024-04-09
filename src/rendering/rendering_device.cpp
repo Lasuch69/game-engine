@@ -626,6 +626,6 @@ void RenderingDevice::windowResize(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-RenderingDevice::RenderingDevice(const std::vector<const char *> extensions, bool useValidation) {
+RenderingDevice::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {
 	_pContext = new VulkanContext(extensions, useValidation);
 }

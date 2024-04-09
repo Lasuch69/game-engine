@@ -19,9 +19,9 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 struct SceneData {
-	std::vector<RS::Mesh> meshes;
-	std::vector<RS::MeshInstance> meshInstances;
-	std::vector<RS::Light> lights;
+	std::vector<MeshID> meshes;
+	std::vector<MeshInstanceID> meshInstances;
+	std::vector<PointLightID> pointLights;
 };
 
 SceneData load(std::filesystem::path path, RenderingServer *pRS) {
@@ -38,9 +38,9 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 
 	for (const Loader::MeshInstance &meshInstance : pGltf->meshInstances) {
 		Loader::Mesh mesh = pGltf->meshes[meshInstance.meshIndex];
-		RS::Mesh meshID = pRS->meshCreate(mesh.primitives[0].vertices, mesh.primitives[0].indices);
+		MeshID meshID = pRS->meshCreate(mesh.primitives[0].vertices, mesh.primitives[0].indices);
 
-		RS::MeshInstance meshInstanceID = pRS->meshInstanceCreate();
+		MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
 		pRS->meshInstanceSetMesh(meshInstanceID, meshID);
 		pRS->meshInstanceSetTransform(meshInstanceID, meshInstance.transform);
 
@@ -49,30 +49,40 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 	}
 
 	for (const Loader::PointLight &pointLight : pGltf->pointLights) {
-		RS::Light lightID = pRS->lightCreate();
-		pRS->lightSetPosition(lightID, pointLight.position);
-		pRS->lightSetRange(lightID, pointLight.range);
-		pRS->lightSetColor(lightID, pointLight.color);
-		pRS->lightSetIntensity(lightID, pointLight.intensity);
+		PointLightID pointLightID = pRS->pointLightCreate();
+		pRS->pointLightSetPosition(pointLightID, pointLight.position);
+		pRS->pointLightSetRange(pointLightID, pointLight.range);
+		pRS->pointLightSetColor(pointLightID, pointLight.color);
+		pRS->pointLightSetIntensity(pointLightID, pointLight.intensity);
 
-		sceneData.lights.push_back(lightID);
+		sceneData.pointLights.push_back(pointLightID);
 	}
 
 	return sceneData;
 }
 
 void clear(SceneData sceneData, RenderingServer *pRS) {
-	for (RS::MeshInstance meshInstance : sceneData.meshInstances) {
+	for (MeshInstanceID meshInstance : sceneData.meshInstances) {
 		pRS->meshInstanceFree(meshInstance);
 	}
 
-	for (RS::Light light : sceneData.lights) {
-		pRS->lightFree(light);
+	for (PointLightID pointLight : sceneData.pointLights) {
+		pRS->pointLightFree(pointLight);
 	}
 
-	for (RS::Mesh mesh : sceneData.meshes) {
+	for (MeshID mesh : sceneData.meshes) {
 		pRS->meshFree(mesh);
 	}
+}
+
+std::vector<const char *> getRequiredExtensions() {
+	uint32_t extensionCount = 0;
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
+
+	std::vector<const char *> extensions(extensionCount);
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+
+	return extensions;
 }
 
 int main(int argc, char *argv[]) {
@@ -90,7 +100,15 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	RenderingServer *pRS = new RenderingServer(pWindow);
+	RenderingServer *pRS = new RenderingServer;
+	pRS->init(getRequiredExtensions());
+
+	VkSurfaceKHR surface;
+	SDL_Vulkan_CreateSurface(pWindow, pRS->getVkInstance(), &surface);
+
+	int width, height;
+	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
+	pRS->windowInit(surface, width, height);
 
 	std::optional<SceneData> sceneData = {};
 
@@ -100,6 +118,17 @@ int main(int argc, char *argv[]) {
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
 				quit = true;
+			}
+			if (event.type == SDL_WINDOWEVENT) {
+				switch (event.window.event) {
+					case SDL_WINDOWEVENT_RESIZED:
+						int width, height;
+						SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
+						pRS->windowResized(width, height);
+						break;
+					default:
+						break;
+				}
 			}
 			if (event.type == SDL_DROPFILE) {
 				char *pFile = event.drop.file;

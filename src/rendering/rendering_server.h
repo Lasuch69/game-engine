@@ -9,94 +9,69 @@
 
 #include "../rid_owner.h"
 
-#include "rendering_device.h"
+#include "types/camera.h"
 #include "types/vertex.h"
 
-namespace RS {
+#include "rendering_device.h"
 
-typedef uint64_t Mesh;
-typedef uint64_t MeshInstance;
-typedef uint64_t Light;
-
-enum Error {
-	None = 0,
-	InvalidResource = 1,
-	InvalidParameter = 2,
-	ResourceInUse = 3,
-};
-
-} // namespace RS
-
-using namespace RS;
+typedef uint64_t MeshID;
+typedef uint64_t MeshInstanceID;
+typedef uint64_t PointLightID;
 
 class RenderingServer {
 private:
-	struct CameraRS {
-		// in radians
-		float fovY = glm::radians(60.0f);
-		float zNear = 0.1f;
-		float zFar = 100.0f;
-
-		glm::mat4 transform = glm::mat4(1.0f);
-
-		glm::mat4 viewMatrix() const;
-		glm::mat4 projectionMatrix(float aspect) const;
-	};
-
-	struct MeshRS {
+	struct Mesh {
 		AllocatedBuffer vertexBuffer;
 		AllocatedBuffer indexBuffer;
 		uint32_t indexCount;
 	};
 
-	struct MeshInstanceRS {
-		Mesh mesh;
+	struct MeshInstance {
+		MeshID mesh;
 		glm::mat4 transform;
 	};
 
-	struct LightRS {
-		glm::vec3 position;
-		float range;
-		glm::vec3 color;
-		float intensity;
-
-		LightData toRaw() const;
-	};
-
-	SDL_Window *_pWindow;
 	RenderingDevice *_pDevice;
+	uint32_t _width, _height = 0;
 
-	CameraRS _camera;
-	RIDOwner<MeshRS> _meshes;
-	RIDOwner<MeshInstanceRS> _meshInstances;
-	RIDOwner<LightRS> _lights;
+	Camera _camera;
+	RIDOwner<Mesh> _meshes;
+	RIDOwner<MeshInstance> _meshInstances;
+	RIDOwner<LightData> _pointLights;
 
 	void _updateLights();
 
 public:
-	Error cameraSetTransform(const glm::mat4 &transform);
-	Error cameraSetFovY(float fovY);
-	Error cameraSetZNear(float zNear);
-	Error cameraSetZFar(float zFar);
+	void cameraSetTransform(const glm::mat4 &transform);
+	void cameraSetFovY(float fovY);
+	void cameraSetZNear(float zNear);
+	void cameraSetZFar(float zFar);
 
-	Mesh meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
-	Error meshFree(Mesh mesh);
+	MeshID meshCreate(const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
+	void meshFree(MeshID mesh);
 
-	Mesh meshInstanceCreate();
-	Error meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh);
-	Error meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform);
-	Error meshInstanceFree(MeshInstance meshInstance);
+	MeshID meshInstanceCreate();
+	void meshInstanceSetMesh(MeshInstanceID meshInstance, MeshID mesh);
+	void meshInstanceSetTransform(MeshInstanceID meshInstance, const glm::mat4 &transform);
+	void meshInstanceFree(MeshInstanceID meshInstance);
 
-	Light lightCreate();
-	Error lightSetPosition(Light light, const glm::vec3 &position);
-	Error lightSetRange(Light light, float range);
-	Error lightSetColor(Light light, const glm::vec3 &color);
-	Error lightSetIntensity(Light light, float intensity);
-	Error lightFree(Light light);
+	PointLightID pointLightCreate();
+	void pointLightSetPosition(PointLightID pointLight, const glm::vec3 &position);
+	void pointLightSetRange(PointLightID pointLight, float range);
+	void pointLightSetColor(PointLightID pointLight, const glm::vec3 &color);
+	void pointLightSetIntensity(PointLightID pointLight, float intensity);
+	void pointLightFree(PointLightID pointLight);
 
 	void draw();
 
-	RenderingServer(SDL_Window *pWindow);
+	void init(const std::vector<const char *> &extensions, bool validation = false);
+
+	vk::Instance getVkInstance() const;
+
+	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void windowResized(uint32_t width, uint32_t height);
 };
+
+typedef RenderingServer RS;
 
 #endif // !RENDERING_SERVER_H

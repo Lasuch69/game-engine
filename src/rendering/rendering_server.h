@@ -7,8 +7,10 @@
 #include <SDL2/SDL_video.h>
 #include <glm/glm.hpp>
 
+#include "../image.h"
 #include "../rid_owner.h"
 
+#include "types/allocated.h"
 #include "types/camera.h"
 #include "types/vertex.h"
 
@@ -17,6 +19,8 @@
 typedef uint64_t MeshID;
 typedef uint64_t MeshInstanceID;
 typedef uint64_t PointLightID;
+typedef uint64_t TextureID;
+typedef uint64_t MaterialID;
 
 class RenderingServer {
 private:
@@ -24,6 +28,8 @@ private:
 		AllocatedBuffer vertexBuffer;
 		AllocatedBuffer indexBuffer;
 		uint32_t indexCount;
+
+		MaterialID material;
 	};
 
 	struct Mesh {
@@ -35,6 +41,10 @@ private:
 		glm::mat4 transform;
 	};
 
+	struct Material {
+		vk::DescriptorSet albedoSet;
+	};
+
 	RenderingDevice *_pDevice;
 	uint32_t _width, _height = 0;
 
@@ -42,6 +52,8 @@ private:
 	RIDOwner<Mesh> _meshes;
 	RIDOwner<MeshInstance> _meshInstances;
 	RIDOwner<LightData> _pointLights;
+	RIDOwner<Texture> _textures;
+	RIDOwner<Material> _materials;
 
 	void _updateLights();
 
@@ -52,8 +64,8 @@ public:
 	void cameraSetZFar(float zFar);
 
 	MeshID meshCreate();
-	void meshAddPrimitive(
-			MeshID mesh, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices);
+	void meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
+			const std::vector<uint32_t> &indices, MaterialID material);
 	void meshFree(MeshID mesh);
 
 	MeshID meshInstanceCreate();
@@ -67,6 +79,12 @@ public:
 	void pointLightSetColor(PointLightID pointLight, const glm::vec3 &color);
 	void pointLightSetIntensity(PointLightID pointLight, float intensity);
 	void pointLightFree(PointLightID pointLight);
+
+	TextureID textureCreate(Image *pImage);
+	void textureFree(TextureID texture);
+
+	MaterialID materialCreate(TextureID albedoTexture);
+	void materialFree(MaterialID material);
 
 	void draw();
 

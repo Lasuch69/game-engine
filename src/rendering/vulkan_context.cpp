@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 #include <limits>
 #include <set>
 #include <string>
@@ -467,6 +468,11 @@ void VulkanContext::initialize(vk::SurfaceKHR surface, uint32_t width, uint32_t 
 	this->surface = surface;
 
 	physicalDevice = pickPhysicalDevice(instance, surface);
+
+	vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
+
+	std::cout << properties.deviceName << std::endl;
+
 	device = createDevice(physicalDevice, surface, validationEnabled);
 
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice, surface);

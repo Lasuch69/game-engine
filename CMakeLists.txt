@@ -35,10 +35,12 @@ FetchContent_MakeAvailable(fastgltf)
 
 include_directories(include thirdparty)
 
+file(GLOB_RECURSE thirdparty_SOURCE thirdparty/*.cpp)
+
 file(GLOB_RECURSE SOURCE src/*.cpp)
 
-add_executable(hayaku ${SOURCE} thirdparty/vma/vk_mem_alloc.cpp)
+add_executable(hayaku ${SOURCE} ${thirdparty_SOURCE})
 
-target_compile_options(hayaku PRIVATE -O2 -Wall)
+target_compile_options(hayaku PRIVATE -Wall -O2)
 
 target_link_libraries(hayaku ${LIBRARIES} fastgltf)

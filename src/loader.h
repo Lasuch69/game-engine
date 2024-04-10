@@ -9,6 +9,8 @@
 
 #include "rendering/types/vertex.h"
 
+#include "image.h"
+
 namespace Loader {
 
 struct Camera {
@@ -44,9 +46,16 @@ struct PointLight {
 	float range;
 };
 
+struct Material {
+	size_t albedoIndex;
+};
+
 struct Gltf {
 	std::string name;
 	glm::mat4 transform;
+
+	std::vector<Material> materials;
+	std::vector<std::shared_ptr<Image>> images;
 
 	std::vector<Mesh> meshes;
 

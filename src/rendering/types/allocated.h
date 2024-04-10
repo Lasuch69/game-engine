@@ -9,4 +9,9 @@ struct AllocatedBuffer {
 	vk::Buffer buffer;
 };
 
+struct AllocatedImage {
+	VmaAllocation allocation;
+	vk::Image image;
+};
+
 #endif // !VK_TYPES_H

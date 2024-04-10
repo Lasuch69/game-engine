@@ -51,9 +51,10 @@ MeshID RS::meshCreate() {
 	return _meshes.insert({});
 }
 
-void RS::meshAddPrimitive(
-		MeshID mesh, const std::vector<Vertex> &vertices, const std::vector<uint32_t> &indices) {
+void RS::meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
+		const std::vector<uint32_t> &indices, MaterialID material) {
 	CHECK_IF_VALID(_meshes, mesh, "Mesh");
+	CHECK_IF_VALID(_materials, material, "Material");
 
 	vk::DeviceSize vertexSize = sizeof(Vertex) * vertices.size();
 	AllocatedBuffer vertexBuffer = _pDevice->bufferCreate(
@@ -71,6 +72,7 @@ void RS::meshAddPrimitive(
 		vertexBuffer,
 		indexBuffer,
 		static_cast<uint32_t>(indices.size()),
+		material,
 	};
 
 	_meshes[mesh].primitives.push_back(primitive);
@@ -145,6 +147,74 @@ void RS::pointLightFree(PointLightID pointLight) {
 	_updateLights();
 }
 
+TextureID RS::textureCreate(Image *pImage) {
+	if (pImage == nullptr)
+		return 0;
+
+	if (pImage->getFormat() != Image::Format::RGBA8) {
+		std::cout << "Image format RGBA8 is required to create texture!" << std::endl;
+		return 0;
+	}
+
+	Texture texture = _pDevice->textureCreate(pImage);
+	return _textures.insert(texture);
+}
+
+void RS::textureFree(TextureID texture) {
+	CHECK_IF_VALID(_textures, texture, "Texture");
+
+	Texture data = _textures.remove(texture).value();
+
+	_pDevice->imageDestroy(data.image);
+	_pDevice->imageViewDestroy(data.imageView);
+	_pDevice->samplerDestroy(data.sampler);
+}
+
+MaterialID RS::materialCreate(TextureID albedoTexture) {
+	if (!_textures.has(albedoTexture)) {
+		std::cout << "Invalid texture: " << albedoTexture << std::endl;
+		albedoTexture = textureCreate(
+				Image::create(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 }).get());
+	}
+
+	Texture albedo = _textures[albedoTexture];
+
+	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
+
+	vk::DescriptorSetAllocateInfo allocInfo =
+			vk::DescriptorSetAllocateInfo()
+					.setDescriptorPool(_pDevice->getDescriptorPool())
+					.setDescriptorSetCount(1)
+					.setSetLayouts(textureLayout);
+
+	VkDescriptorSet albedoSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
+
+	vk::DescriptorImageInfo imageInfo =
+			vk::DescriptorImageInfo()
+					.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+					.setImageView(albedo.imageView)
+					.setSampler(albedo.sampler);
+
+	vk::WriteDescriptorSet writeInfo =
+			vk::WriteDescriptorSet()
+					.setDstSet(albedoSet)
+					.setDstBinding(0)
+					.setDstArrayElement(0)
+					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+					.setDescriptorCount(1)
+					.setImageInfo(imageInfo);
+
+	_pDevice->getDevice().updateDescriptorSets(writeInfo, nullptr);
+
+	return _materials.insert({ albedoSet });
+}
+
+void RS::materialFree(MaterialID material) {
+	CHECK_IF_VALID(_materials, material, "Material");
+
+	_materials.remove(material);
+}
+
 void RenderingServer::draw() {
 	float aspect = static_cast<float>(_width) / static_cast<float>(_height);
 
@@ -168,8 +238,12 @@ void RenderingServer::draw() {
 				0, sizeof(MeshPushConstants), &constants);
 
 		for (const Primitive &primitive : mesh.primitives) {
-			vk::DeviceSize offset = 0;
+			Material material = _materials[primitive.material];
 
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+					_pDevice->getPipelineLayout(), 2, material.albedoSet, nullptr);
+
+			vk::DeviceSize offset = 0;
 			commandBuffer.bindVertexBuffers(0, 1, &primitive.vertexBuffer.buffer, &offset);
 			commandBuffer.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
 			commandBuffer.drawIndexed(primitive.indexCount, 1, 0, 0, 0);

@@ -17,6 +17,8 @@ layout(set = 1, binding = 0) readonly buffer LightDataBuffer {
     LightData data[];
 } lights;
 
+layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
+
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inColor;
@@ -29,7 +31,8 @@ const vec3 specColor = vec3(1.0, 1.0, 1.0);
 const float shininess = 16.0;
 
 void main() {
-    vec3 finalColor = inColor * ambient;
+	vec3 albedo = texture(albedoTexture, inTexCoord).rgb;
+    vec3 finalColor = albedo * ambient;
 
     for (int i = 0; i < ubo.lightCount; i++) {
         // light position to view space
@@ -59,7 +62,7 @@ void main() {
         vec3 light = lambertian * lightColor * intensity / distance +
                 specColor * specular * lightColor * intensity / distance;
 
-        finalColor += inColor * light;
+        finalColor += albedo * light;
     }
 
     fragColor = vec4(finalColor, 1.0);

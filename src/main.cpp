@@ -1,3 +1,5 @@
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_scancode.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -22,12 +24,25 @@ struct SceneData {
 	std::vector<MeshID> meshes;
 	std::vector<MeshInstanceID> meshInstances;
 	std::vector<PointLightID> pointLights;
+	std::vector<TextureID> textures;
+	std::vector<MaterialID> materials;
 };
 
 SceneData load(std::filesystem::path path, RenderingServer *pRS) {
+	SceneData sceneData = {};
+
 	Loader::Gltf *pGltf = Loader::loadGltf(path);
 
-	SceneData sceneData = {};
+	for (std::shared_ptr<Image> pImage : pGltf->images) {
+		TextureID texture = pRS->textureCreate(pImage.get());
+		sceneData.textures.push_back(texture);
+	}
+
+	for (const Loader::Material &materialData : pGltf->materials) {
+		TextureID albedoTexture = sceneData.textures[materialData.albedoIndex];
+		MaterialID material = pRS->materialCreate(albedoTexture);
+		sceneData.materials.push_back(material);
+	}
 
 	for (const Loader::Camera &camera : pGltf->cameras) {
 		pRS->cameraSetTransform(camera.transform);
@@ -41,7 +56,8 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 		MeshID meshID = pRS->meshCreate();
 
 		for (const Loader::Primitive &primitive : mesh.primitives) {
-			pRS->meshAddPrimitive(meshID, primitive.vertices, primitive.indices);
+			pRS->meshAddPrimitive(meshID, primitive.vertices, primitive.indices,
+					sceneData.materials[primitive.materialIndex.value()]);
 		}
 
 		MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
@@ -62,6 +78,7 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 		sceneData.pointLights.push_back(pointLightID);
 	}
 
+	free(pGltf);
 	return sceneData;
 }
 
@@ -76,6 +93,14 @@ void clear(SceneData sceneData, RenderingServer *pRS) {
 
 	for (MeshID mesh : sceneData.meshes) {
 		pRS->meshFree(mesh);
+	}
+
+	for (MaterialID material : sceneData.materials) {
+		pRS->materialFree(material);
+	}
+
+	for (TextureID texture : sceneData.textures) {
+		pRS->textureFree(texture);
 	}
 }
 
@@ -105,7 +130,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	RenderingServer *pRS = new RenderingServer;
-	pRS->init(getRequiredExtensions());
+	pRS->init(getRequiredExtensions(), true);
 
 	VkSurfaceKHR surface;
 	SDL_Vulkan_CreateSurface(pWindow, pRS->getVkInstance(), &surface);

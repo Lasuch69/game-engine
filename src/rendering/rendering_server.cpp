@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <iostream>
 
-#include <SDL2/SDL_vulkan.h>
 #include <glm/glm.hpp>
 
 #include "rendering_device.h"

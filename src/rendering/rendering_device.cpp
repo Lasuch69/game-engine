@@ -3,12 +3,6 @@
 #include <cstdio>
 #include <stdexcept>
 
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/gtx/euler_angles.hpp>
-#include <glm/matrix.hpp>
-
-#include <vulkan/vulkan_core.h>
-
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
 

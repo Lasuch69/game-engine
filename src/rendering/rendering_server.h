@@ -22,6 +22,8 @@ typedef uint64_t PointLight;
 typedef uint64_t Texture;
 typedef uint64_t Material;
 
+#define NULL_HANDLE 0
+
 class RenderingServer {
 private:
 	struct PrimitiveRD {
@@ -48,6 +50,8 @@ private:
 
 	RenderingDevice *_pDevice;
 	uint32_t _width, _height = 0;
+
+	Texture _whiteTexture = NULL_HANDLE;
 
 	Camera _camera;
 	RIDOwner<MeshRD> _meshes;
@@ -84,7 +88,7 @@ public:
 	Texture textureCreate(Image *pImage);
 	void textureFree(Texture texture);
 
-	Material materialCreate(Texture albedoTexture);
+	Material materialCreate(Texture albedo = NULL_HANDLE);
 	void materialFree(Material material);
 
 	void draw();

@@ -1,7 +1,9 @@
+#include <cassert>
 #include <cstdint>
 #include <iostream>
 
 #include <glm/glm.hpp>
+#include <optional>
 
 #include "rendering_device.h"
 #include "rendering_server.h"
@@ -78,11 +80,13 @@ void RS::meshAddPrimitive(Mesh mesh, const std::vector<Vertex> &vertices,
 }
 
 void RS::meshFree(Mesh mesh) {
-	CHECK_IF_VALID(_meshes, mesh, "Mesh");
+	std::optional<MeshRD> result = _meshes.remove(mesh);
 
-	MeshRD data = _meshes.remove(mesh).value();
+	if (!result.has_value())
+		return;
 
-	for (PrimitiveRD primitive : data.primitives) {
+	MeshRD _mesh = result.value();
+	for (PrimitiveRD primitive : _mesh.primitives) {
 		_pDevice->bufferDestroy(primitive.vertexBuffer);
 		_pDevice->bufferDestroy(primitive.indexBuffer);
 	}
@@ -101,11 +105,11 @@ void RS::meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh) {
 
 void RS::meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
+
 	_meshInstances[meshInstance].transform = transform;
 }
 
 void RS::meshInstanceFree(MeshInstance meshInstance) {
-	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 	_meshInstances.remove(meshInstance);
 }
 
@@ -118,65 +122,71 @@ PointLight RenderingServer::pointLightCreate() {
 
 void RS::pointLightSetPosition(PointLight pointLight, const glm::vec3 &position) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
+
 	_pointLights[pointLight].position = position;
 	_updateLights();
 }
 
 void RS::pointLightSetRange(PointLight pointLight, float range) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
+
 	_pointLights[pointLight].range = range;
 	_updateLights();
 }
 
 void RS::pointLightSetColor(PointLight pointLight, const glm::vec3 &color) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
+
 	_pointLights[pointLight].color = color;
 	_updateLights();
 }
 
 void RS::pointLightSetIntensity(PointLight pointLight, float intensity) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
+
 	_pointLights[pointLight].intensity = intensity;
 	_updateLights();
 }
 
 void RS::pointLightFree(PointLight pointLight) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-	_pointLights.remove(pointLight);
+	std::optional<PointLightRD> result = _pointLights.remove(pointLight);
+
+	if (!result.has_value())
+		return;
+
 	_updateLights();
 }
 
 Texture RS::textureCreate(Image *pImage) {
 	if (pImage == nullptr)
-		return 0;
+		return NULL_HANDLE;
 
 	if (pImage->getFormat() != Image::Format::RGBA8) {
 		std::cout << "Image format RGBA8 is required to create texture!" << std::endl;
-		return 0;
+		return NULL_HANDLE;
 	}
 
-	TextureRD texture = _pDevice->textureCreate(pImage);
-	return _textures.insert(texture);
+	TextureRD _texture = _pDevice->textureCreate(pImage);
+	return _textures.insert(_texture);
 }
 
 void RS::textureFree(Texture texture) {
-	CHECK_IF_VALID(_textures, texture, "Texture");
+	std::optional<TextureRD> result = _textures.remove(texture);
 
-	TextureRD data = _textures.remove(texture).value();
+	if (!result.has_value())
+		return;
 
-	_pDevice->imageDestroy(data.image);
-	_pDevice->imageViewDestroy(data.imageView);
-	_pDevice->samplerDestroy(data.sampler);
+	TextureRD _texture = result.value();
+	_pDevice->imageDestroy(_texture.image);
+	_pDevice->imageViewDestroy(_texture.imageView);
+	_pDevice->samplerDestroy(_texture.sampler);
 }
 
 Material RS::materialCreate(Texture albedoTexture) {
-	if (!_textures.has(albedoTexture)) {
-		std::cout << "Invalid texture: " << albedoTexture << std::endl;
-		albedoTexture = textureCreate(
-				Image::create(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 }).get());
-	}
+	if (!_textures.has(albedoTexture))
+		albedoTexture = _whiteTexture;
 
-	TextureRD albedo = _textures[albedoTexture];
+	TextureRD _albedoTexture = _textures[albedoTexture];
 
 	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
 
@@ -191,8 +201,8 @@ Material RS::materialCreate(Texture albedoTexture) {
 	vk::DescriptorImageInfo imageInfo =
 			vk::DescriptorImageInfo()
 					.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-					.setImageView(albedo.imageView)
-					.setSampler(albedo.sampler);
+					.setImageView(_albedoTexture.imageView)
+					.setSampler(_albedoTexture.sampler);
 
 	vk::WriteDescriptorSet writeInfo =
 			vk::WriteDescriptorSet()
@@ -209,8 +219,6 @@ Material RS::materialCreate(Texture albedoTexture) {
 }
 
 void RS::materialFree(Material material) {
-	CHECK_IF_VALID(_materials, material, "Material");
-
 	_materials.remove(material);
 }
 
@@ -265,6 +273,12 @@ void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 	_width = width;
 	_height = height;
+
+	std::shared_ptr<Image> pImage =
+			Image::create(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 });
+
+	// create fallback white texture
+	_whiteTexture = textureCreate(pImage.get());
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {

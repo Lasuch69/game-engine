@@ -14,12 +14,12 @@
 
 void RenderingServer::_updateLights() {
 	if (_pointLights.size() == 0) {
-		LightData lightData{};
-		_pDevice->updateLightBuffer((uint8_t *)&lightData, sizeof(LightData));
+		PointLightRD lightData{};
+		_pDevice->updateLightBuffer((uint8_t *)&lightData, sizeof(PointLightRD));
 		return;
 	}
 
-	std::vector<LightData> lights;
+	std::vector<PointLightRD> lights;
 	for (const auto &[id, light] : _pointLights.map()) {
 		if (lights.size() >= 8)
 			break;
@@ -27,7 +27,7 @@ void RenderingServer::_updateLights() {
 		lights.push_back(light);
 	}
 
-	_pDevice->updateLightBuffer((uint8_t *)lights.data(), sizeof(LightData) * lights.size());
+	_pDevice->updateLightBuffer((uint8_t *)lights.data(), sizeof(PointLightRD) * lights.size());
 }
 
 void RS::cameraSetTransform(const glm::mat4 &transform) {
@@ -46,12 +46,12 @@ void RS::cameraSetZFar(float zFar) {
 	_camera.zFar = zFar;
 }
 
-MeshID RS::meshCreate() {
+Mesh RS::meshCreate() {
 	return _meshes.insert({});
 }
 
-void RS::meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
-		const std::vector<uint32_t> &indices, MaterialID material) {
+void RS::meshAddPrimitive(Mesh mesh, const std::vector<Vertex> &vertices,
+		const std::vector<uint32_t> &indices, Material material) {
 	CHECK_IF_VALID(_meshes, mesh, "Mesh");
 	CHECK_IF_VALID(_materials, material, "Material");
 
@@ -67,7 +67,7 @@ void RS::meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
 			indexSize);
 	_pDevice->bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexSize);
 
-	Primitive primitive = {
+	PrimitiveRD primitive = {
 		vertexBuffer,
 		indexBuffer,
 		static_cast<uint32_t>(indices.size()),
@@ -77,76 +77,76 @@ void RS::meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
 	_meshes[mesh].primitives.push_back(primitive);
 }
 
-void RS::meshFree(MeshID mesh) {
+void RS::meshFree(Mesh mesh) {
 	CHECK_IF_VALID(_meshes, mesh, "Mesh");
 
-	Mesh data = _meshes.remove(mesh).value();
+	MeshRD data = _meshes.remove(mesh).value();
 
-	for (Primitive primitive : data.primitives) {
+	for (PrimitiveRD primitive : data.primitives) {
 		_pDevice->bufferDestroy(primitive.vertexBuffer);
 		_pDevice->bufferDestroy(primitive.indexBuffer);
 	}
 }
 
-MeshInstanceID RenderingServer::meshInstanceCreate() {
+MeshInstance RenderingServer::meshInstanceCreate() {
 	return _meshInstances.insert({});
 }
 
-void RS::meshInstanceSetMesh(MeshInstanceID meshInstance, MeshID mesh) {
+void RS::meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 	CHECK_IF_VALID(_meshes, mesh, "Mesh")
 
 	_meshInstances[meshInstance].mesh = mesh;
 }
 
-void RS::meshInstanceSetTransform(MeshInstanceID meshInstance, const glm::mat4 &transform) {
+void RS::meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 	_meshInstances[meshInstance].transform = transform;
 }
 
-void RS::meshInstanceFree(MeshInstanceID meshInstance) {
+void RS::meshInstanceFree(MeshInstance meshInstance) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 	_meshInstances.remove(meshInstance);
 }
 
-PointLightID RenderingServer::pointLightCreate() {
-	PointLightID pointLight = _pointLights.insert({});
+PointLight RenderingServer::pointLightCreate() {
+	PointLight pointLight = _pointLights.insert({});
 	_updateLights();
 
 	return pointLight;
 }
 
-void RS::pointLightSetPosition(PointLightID pointLight, const glm::vec3 &position) {
+void RS::pointLightSetPosition(PointLight pointLight, const glm::vec3 &position) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].position = position;
 	_updateLights();
 }
 
-void RS::pointLightSetRange(PointLightID pointLight, float range) {
+void RS::pointLightSetRange(PointLight pointLight, float range) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].range = range;
 	_updateLights();
 }
 
-void RS::pointLightSetColor(PointLightID pointLight, const glm::vec3 &color) {
+void RS::pointLightSetColor(PointLight pointLight, const glm::vec3 &color) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].color = color;
 	_updateLights();
 }
 
-void RS::pointLightSetIntensity(PointLightID pointLight, float intensity) {
+void RS::pointLightSetIntensity(PointLight pointLight, float intensity) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].intensity = intensity;
 	_updateLights();
 }
 
-void RS::pointLightFree(PointLightID pointLight) {
+void RS::pointLightFree(PointLight pointLight) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights.remove(pointLight);
 	_updateLights();
 }
 
-TextureID RS::textureCreate(Image *pImage) {
+Texture RS::textureCreate(Image *pImage) {
 	if (pImage == nullptr)
 		return 0;
 
@@ -155,28 +155,28 @@ TextureID RS::textureCreate(Image *pImage) {
 		return 0;
 	}
 
-	Texture texture = _pDevice->textureCreate(pImage);
+	TextureRD texture = _pDevice->textureCreate(pImage);
 	return _textures.insert(texture);
 }
 
-void RS::textureFree(TextureID texture) {
+void RS::textureFree(Texture texture) {
 	CHECK_IF_VALID(_textures, texture, "Texture");
 
-	Texture data = _textures.remove(texture).value();
+	TextureRD data = _textures.remove(texture).value();
 
 	_pDevice->imageDestroy(data.image);
 	_pDevice->imageViewDestroy(data.imageView);
 	_pDevice->samplerDestroy(data.sampler);
 }
 
-MaterialID RS::materialCreate(TextureID albedoTexture) {
+Material RS::materialCreate(Texture albedoTexture) {
 	if (!_textures.has(albedoTexture)) {
 		std::cout << "Invalid texture: " << albedoTexture << std::endl;
 		albedoTexture = textureCreate(
 				Image::create(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 }).get());
 	}
 
-	Texture albedo = _textures[albedoTexture];
+	TextureRD albedo = _textures[albedoTexture];
 
 	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
 
@@ -208,7 +208,7 @@ MaterialID RS::materialCreate(TextureID albedoTexture) {
 	return _materials.insert({ albedoSet });
 }
 
-void RS::materialFree(MaterialID material) {
+void RS::materialFree(Material material) {
 	CHECK_IF_VALID(_materials, material, "Material");
 
 	_materials.remove(material);
@@ -225,7 +225,7 @@ void RenderingServer::draw() {
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
 	for (const auto &[meshInstance, meshInstanceRS] : _meshInstances.map()) {
-		const Mesh &mesh = _meshes[meshInstanceRS.mesh];
+		const MeshRD &mesh = _meshes[meshInstanceRS.mesh];
 
 		glm::mat4 modelView = meshInstanceRS.transform * view;
 
@@ -236,8 +236,8 @@ void RenderingServer::draw() {
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
 				0, sizeof(MeshPushConstants), &constants);
 
-		for (const Primitive &primitive : mesh.primitives) {
-			Material material = _materials[primitive.material];
+		for (const PrimitiveRD &primitive : mesh.primitives) {
+			MaterialRD material = _materials[primitive.material];
 
 			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
 					_pDevice->getPipelineLayout(), 2, material.albedoSet, nullptr);

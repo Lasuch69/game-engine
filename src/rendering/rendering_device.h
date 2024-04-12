@@ -26,14 +26,14 @@ struct MeshPushConstants {
 	glm::mat4 modelViewNormal;
 };
 
-struct LightData {
+struct PointLightRD {
 	glm::vec3 position;
 	float range;
 	glm::vec3 color;
 	float intensity;
 };
 
-struct Texture {
+struct TextureRD {
 	AllocatedImage image;
 	vk::ImageView imageView;
 	vk::Sampler sampler;
@@ -106,7 +106,7 @@ public:
 	vk::Sampler samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias = 0.0f);
 	void samplerDestroy(vk::Sampler sampler);
 
-	Texture textureCreate(Image *pImage);
+	TextureRD textureCreate(Image *pImage);
 
 	void updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view, uint32_t lightCount);
 	void updateLightBuffer(uint8_t *pData, size_t size);

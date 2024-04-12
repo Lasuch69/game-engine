@@ -16,32 +16,33 @@
 
 #include "rendering_device.h"
 
-typedef uint64_t MeshID;
-typedef uint64_t MeshInstanceID;
-typedef uint64_t PointLightID;
-typedef uint64_t TextureID;
-typedef uint64_t MaterialID;
+typedef uint64_t Mesh;
+typedef uint64_t MeshInstance;
+typedef uint64_t PointLight;
+typedef uint64_t Texture;
+typedef uint64_t Material;
 
 class RenderingServer {
 private:
-	struct Primitive {
+	struct PrimitiveRD {
 		AllocatedBuffer vertexBuffer;
 		AllocatedBuffer indexBuffer;
 		uint32_t indexCount;
 
-		MaterialID material;
+		Material material;
 	};
 
-	struct Mesh {
-		std::vector<Primitive> primitives;
+	struct MeshRD {
+		std::vector<PrimitiveRD> primitives;
 	};
 
-	struct MeshInstance {
-		MeshID mesh;
+	struct MeshInstanceRD {
 		glm::mat4 transform;
+
+		Mesh mesh;
 	};
 
-	struct Material {
+	struct MaterialRD {
 		vk::DescriptorSet albedoSet;
 	};
 
@@ -49,11 +50,11 @@ private:
 	uint32_t _width, _height = 0;
 
 	Camera _camera;
-	RIDOwner<Mesh> _meshes;
-	RIDOwner<MeshInstance> _meshInstances;
-	RIDOwner<LightData> _pointLights;
-	RIDOwner<Texture> _textures;
-	RIDOwner<Material> _materials;
+	RIDOwner<MeshRD> _meshes;
+	RIDOwner<MeshInstanceRD> _meshInstances;
+	RIDOwner<PointLightRD> _pointLights;
+	RIDOwner<TextureRD> _textures;
+	RIDOwner<MaterialRD> _materials;
 
 	void _updateLights();
 
@@ -63,28 +64,28 @@ public:
 	void cameraSetZNear(float zNear);
 	void cameraSetZFar(float zFar);
 
-	MeshID meshCreate();
-	void meshAddPrimitive(MeshID mesh, const std::vector<Vertex> &vertices,
-			const std::vector<uint32_t> &indices, MaterialID material);
-	void meshFree(MeshID mesh);
+	Mesh meshCreate();
+	void meshAddPrimitive(Mesh mesh, const std::vector<Vertex> &vertices,
+			const std::vector<uint32_t> &indices, Material material);
+	void meshFree(Mesh mesh);
 
-	MeshID meshInstanceCreate();
-	void meshInstanceSetMesh(MeshInstanceID meshInstance, MeshID mesh);
-	void meshInstanceSetTransform(MeshInstanceID meshInstance, const glm::mat4 &transform);
-	void meshInstanceFree(MeshInstanceID meshInstance);
+	Mesh meshInstanceCreate();
+	void meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh);
+	void meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform);
+	void meshInstanceFree(MeshInstance meshInstance);
 
-	PointLightID pointLightCreate();
-	void pointLightSetPosition(PointLightID pointLight, const glm::vec3 &position);
-	void pointLightSetRange(PointLightID pointLight, float range);
-	void pointLightSetColor(PointLightID pointLight, const glm::vec3 &color);
-	void pointLightSetIntensity(PointLightID pointLight, float intensity);
-	void pointLightFree(PointLightID pointLight);
+	PointLight pointLightCreate();
+	void pointLightSetPosition(PointLight pointLight, const glm::vec3 &position);
+	void pointLightSetRange(PointLight pointLight, float range);
+	void pointLightSetColor(PointLight pointLight, const glm::vec3 &color);
+	void pointLightSetIntensity(PointLight pointLight, float intensity);
+	void pointLightFree(PointLight pointLight);
 
-	TextureID textureCreate(Image *pImage);
-	void textureFree(TextureID texture);
+	Texture textureCreate(Image *pImage);
+	void textureFree(Texture texture);
 
-	MaterialID materialCreate(TextureID albedoTexture);
-	void materialFree(MaterialID material);
+	Material materialCreate(Texture albedoTexture);
+	void materialFree(Material material);
 
 	void draw();
 

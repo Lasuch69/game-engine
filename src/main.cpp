@@ -19,11 +19,11 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 struct SceneData {
-	std::vector<MeshID> meshes;
-	std::vector<MeshInstanceID> meshInstances;
-	std::vector<PointLightID> pointLights;
-	std::vector<TextureID> textures;
-	std::vector<MaterialID> materials;
+	std::vector<Mesh> meshes;
+	std::vector<MeshInstance> meshInstances;
+	std::vector<PointLight> pointLights;
+	std::vector<Texture> textures;
+	std::vector<Material> materials;
 };
 
 SceneData load(std::filesystem::path path, RenderingServer *pRS) {
@@ -32,13 +32,13 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 	Loader::Gltf *pGltf = Loader::loadGltf(path);
 
 	for (std::shared_ptr<Image> pImage : pGltf->images) {
-		TextureID texture = pRS->textureCreate(pImage.get());
+		Texture texture = pRS->textureCreate(pImage.get());
 		sceneData.textures.push_back(texture);
 	}
 
 	for (const Loader::Material &materialData : pGltf->materials) {
-		TextureID albedoTexture = sceneData.textures[materialData.albedoIndex];
-		MaterialID material = pRS->materialCreate(albedoTexture);
+		Texture albedoTexture = sceneData.textures[materialData.albedoIndex];
+		Material material = pRS->materialCreate(albedoTexture);
 		sceneData.materials.push_back(material);
 	}
 
@@ -51,14 +51,14 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 
 	for (const Loader::MeshInstance &meshInstance : pGltf->meshInstances) {
 		Loader::Mesh mesh = pGltf->meshes[meshInstance.meshIndex];
-		MeshID meshID = pRS->meshCreate();
+		Mesh meshID = pRS->meshCreate();
 
 		for (const Loader::Primitive &primitive : mesh.primitives) {
 			pRS->meshAddPrimitive(meshID, primitive.vertices, primitive.indices,
 					sceneData.materials[primitive.materialIndex.value()]);
 		}
 
-		MeshInstanceID meshInstanceID = pRS->meshInstanceCreate();
+		MeshInstance meshInstanceID = pRS->meshInstanceCreate();
 		pRS->meshInstanceSetMesh(meshInstanceID, meshID);
 		pRS->meshInstanceSetTransform(meshInstanceID, meshInstance.transform);
 
@@ -67,7 +67,7 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 	}
 
 	for (const Loader::PointLight &pointLight : pGltf->pointLights) {
-		PointLightID pointLightID = pRS->pointLightCreate();
+		PointLight pointLightID = pRS->pointLightCreate();
 		pRS->pointLightSetPosition(pointLightID, pointLight.position);
 		pRS->pointLightSetRange(pointLightID, pointLight.range);
 		pRS->pointLightSetColor(pointLightID, pointLight.color);
@@ -81,23 +81,23 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 }
 
 void clear(SceneData sceneData, RenderingServer *pRS) {
-	for (MeshInstanceID meshInstance : sceneData.meshInstances) {
+	for (MeshInstance meshInstance : sceneData.meshInstances) {
 		pRS->meshInstanceFree(meshInstance);
 	}
 
-	for (PointLightID pointLight : sceneData.pointLights) {
+	for (PointLight pointLight : sceneData.pointLights) {
 		pRS->pointLightFree(pointLight);
 	}
 
-	for (MeshID mesh : sceneData.meshes) {
+	for (Mesh mesh : sceneData.meshes) {
 		pRS->meshFree(mesh);
 	}
 
-	for (MaterialID material : sceneData.materials) {
+	for (Material material : sceneData.materials) {
 		pRS->materialFree(material);
 	}
 
-	for (TextureID texture : sceneData.textures) {
+	for (Texture texture : sceneData.textures) {
 		pRS->textureFree(texture);
 	}
 }

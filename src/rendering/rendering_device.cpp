@@ -463,7 +463,7 @@ void RenderingDevice::samplerDestroy(vk::Sampler sampler) {
 	_pContext->device.destroySampler(sampler);
 }
 
-Texture RenderingDevice::textureCreate(Image *pImage) {
+TextureRD RenderingDevice::textureCreate(Image *pImage) {
 	uint32_t width = pImage->getWidth();
 	uint32_t height = pImage->getHeight();
 
@@ -842,7 +842,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 			printf("Failed to allocate light set!\n");
 		}
 
-		vk::DeviceSize bufferSize = sizeof(LightData) * MAX_LIGHT_COUNT;
+		vk::DeviceSize bufferSize = sizeof(PointLightRD) * MAX_LIGHT_COUNT;
 
 		_lightBuffer = bufferCreate(
 				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,

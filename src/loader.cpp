@@ -58,8 +58,7 @@ Image::Format _channelsToFormat(int channels) {
 	}
 }
 
-std::shared_ptr<Image> _createImage(
-		int width, int height, int channels, const std::vector<uint8_t> &data) {
+Image *_createImage(int width, int height, int channels, const std::vector<uint8_t> &data) {
 	if (channels == 4)
 		return Image::create(width, height, _channelsToFormat(channels), data);
 
@@ -97,9 +96,9 @@ std::shared_ptr<Image> _createImage(
 	return Image::create(width, height, Image::Format::RGBA8, newData);
 }
 
-std::shared_ptr<Image> _loadImage(
+Image *_loadImage(
 		fastgltf::Image &image, fastgltf::Asset *pAsset, const std::filesystem::path &basePath) {
-	std::shared_ptr<Image> pImage = nullptr;
+	Image *pImage = nullptr;
 
 	std::visit(
 			fastgltf::visitor{
@@ -222,9 +221,7 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &mesh) {
 		fastgltf::iterateAccessor<std::uint32_t>(
 				*pAsset, indexAccessor, [&](std::uint32_t index) { indices[idx++] = index; });
 
-		std::optional<size_t> materialIndex = {};
-		if (primitive.materialIndex.has_value())
-			materialIndex = primitive.materialIndex.value();
+		size_t materialIndex = primitive.materialIndex.value_or(0);
 
 		primitives.push_back(Primitive{
 				vertices,
@@ -236,7 +233,7 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &mesh) {
 	return Mesh{ mesh.name.c_str(), primitives };
 }
 
-Gltf *Loader::loadGltf(std::filesystem::path path) {
+SceneGlTF *Loader::loadGltf(std::filesystem::path path) {
 	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	fastgltf::GltfDataBuffer data;
@@ -252,7 +249,7 @@ Gltf *Loader::loadGltf(std::filesystem::path path) {
 
 	fastgltf::Asset *pAsset = result.get_if();
 
-	Gltf *pGltf = new Gltf;
+	SceneGlTF *pGltf = new SceneGlTF;
 	pGltf->name = path.stem();
 
 	for (const fastgltf::Material &material : pAsset->materials) {
@@ -267,7 +264,7 @@ Gltf *Loader::loadGltf(std::filesystem::path path) {
 	}
 
 	for (fastgltf::Image &image : pAsset->images) {
-		std::shared_ptr<Image> pImage = _loadImage(image, pAsset, path.parent_path());
+		Image *pImage = _loadImage(image, pAsset, path.parent_path());
 
 		if (pImage == nullptr) {
 			std::cout << "Failed to load image: " << image.name << std::endl;

@@ -1,5 +1,4 @@
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "image.h"
@@ -26,13 +25,12 @@ Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<u
 	_data = data;
 }
 
-std::shared_ptr<Image> Image::create(
+Image *Image::create(
 		uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
 	size_t size = width * height * _formatPixelSize(format);
 
 	if (size == data.size()) {
-		Image *pImage = new Image(width, height, format, data);
-		return std::shared_ptr<Image>(pImage);
+		return new Image(width, height, format, data);
 	}
 
 	return nullptr;

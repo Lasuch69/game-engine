@@ -3,7 +3,6 @@
 
 #include <cstdint>
 #include <filesystem>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,7 +23,7 @@ struct Camera {
 struct Primitive {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	std::optional<size_t> materialIndex;
+	size_t materialIndex;
 };
 
 struct Mesh {
@@ -50,12 +49,12 @@ struct Material {
 	size_t albedoIndex;
 };
 
-struct Gltf {
+struct SceneGlTF {
 	std::string name;
 	glm::mat4 transform;
 
 	std::vector<Material> materials;
-	std::vector<std::shared_ptr<Image>> images;
+	std::vector<Image *> images;
 
 	std::vector<Mesh> meshes;
 
@@ -64,7 +63,7 @@ struct Gltf {
 	std::vector<PointLight> pointLights;
 };
 
-Gltf *loadGltf(std::filesystem::path path);
+SceneGlTF *loadGltf(std::filesystem::path path);
 
 } // namespace Loader
 

@@ -48,6 +48,7 @@ private:
 		vk::DescriptorSet albedoSet;
 	};
 
+	bool _useValidation = false;
 	RenderingDevice *_pDevice;
 	uint32_t _width, _height = 0;
 
@@ -93,12 +94,14 @@ public:
 
 	void draw();
 
-	void init(const std::vector<const char *> &extensions, bool validation = false);
+	void init(const std::vector<const char *> &extensions);
 
 	vk::Instance getVkInstance() const;
 
 	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
 	void windowResized(uint32_t width, uint32_t height);
+
+	RenderingServer(int argc, char **argv);
 };
 
 typedef RenderingServer RS;

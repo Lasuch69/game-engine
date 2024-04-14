@@ -260,8 +260,8 @@ void RenderingServer::draw() {
 	_pDevice->drawEnd(commandBuffer);
 }
 
-void RS::init(const std::vector<const char *> &extensions, bool validation) {
-	_pDevice = new RenderingDevice(extensions, validation);
+void RS::init(const std::vector<const char *> &extensions) {
+	_pDevice = new RenderingDevice(extensions, _useValidation);
 }
 
 vk::Instance RS::getVkInstance() const {
@@ -286,4 +286,11 @@ void RS::windowResized(uint32_t width, uint32_t height) {
 
 	_width = width;
 	_height = height;
+}
+
+RenderingServer::RenderingServer(int argc, char **argv) {
+	for (int i = 1; i < argc; i++) {
+		if (strcmp("--validation", argv[i]) == 0)
+			_useValidation = true;
+	}
 }

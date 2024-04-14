@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <optional>
 #include <vector>
@@ -30,6 +31,10 @@ SceneData load(std::filesystem::path path, RenderingServer *pRS) {
 	SceneData sceneData = {};
 
 	Loader::Gltf *pGltf = Loader::loadGltf(path);
+
+	if (pGltf == nullptr) {
+		return {};
+	}
 
 	for (std::shared_ptr<Image> pImage : pGltf->images) {
 		Texture texture = pRS->textureCreate(pImage.get());
@@ -127,8 +132,8 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	RenderingServer *pRS = new RenderingServer;
-	pRS->init(getRequiredExtensions(), true);
+	RS *pRS = new RS(argc, argv);
+	pRS->init(getRequiredExtensions());
 
 	VkSurfaceKHR surface;
 	SDL_Vulkan_CreateSurface(pWindow, pRS->getVkInstance(), &surface);
@@ -138,6 +143,14 @@ int main(int argc, char *argv[]) {
 	pRS->windowInit(surface, width, height);
 
 	std::optional<SceneData> sceneData = {};
+
+	for (int i = 1; i < argc; i++) {
+		// --scene <path>
+		if (strcmp("--scene", argv[i]) == 0 && i < argc - 1) {
+			std::filesystem::path path(argv[i + 1]);
+			sceneData = load(path, pRS);
+		}
+	}
 
 	bool quit = false;
 	while (!quit) {
@@ -158,17 +171,15 @@ int main(int argc, char *argv[]) {
 				}
 			}
 			if (event.type == SDL_DROPFILE) {
-				char *pFile = event.drop.file;
-
-				SceneData newScene = load(pFile, pRS);
+				char *pPath = event.drop.file;
 
 				if (sceneData.has_value()) {
 					clear(sceneData.value(), pRS);
 				}
 
-				sceneData = newScene;
+				sceneData = load(pPath, pRS);
 
-				SDL_free(pFile);
+				SDL_free(pPath);
 			}
 		}
 

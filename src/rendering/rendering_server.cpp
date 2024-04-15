@@ -1,4 +1,3 @@
-#include <cassert>
 #include <cstdint>
 #include <iostream>
 
@@ -48,35 +47,72 @@ void RS::cameraSetZFar(float zFar) {
 	_camera.zFar = zFar;
 }
 
-Mesh RS::meshCreate() {
-	return _meshes.insert({});
-}
+Mesh RS::meshCreate(const std::vector<Primitive> &primitives) {
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
 
-void RS::meshAddPrimitive(Mesh mesh, const std::vector<Vertex> &vertices,
-		const std::vector<uint32_t> &indices, Material material) {
-	CHECK_IF_VALID(_meshes, mesh, "Mesh");
-	CHECK_IF_VALID(_materials, material, "Material");
+	{
+		size_t totalVertexCount = 0;
+		size_t totalIndexCount = 0;
 
-	vk::DeviceSize vertexSize = sizeof(Vertex) * vertices.size();
+		for (const Primitive &primitive : primitives) {
+			totalVertexCount += primitive.vertices.size();
+			totalIndexCount += primitive.indices.size();
+		}
+
+		vertices.resize(totalVertexCount);
+		indices.resize(totalIndexCount);
+	}
+
+	uint32_t vertexOffset = 0;
+	uint32_t indexOffset = 0;
+
+	std::vector<PrimitiveRD> _primitives = {};
+
+	for (const Primitive &primitive : primitives) {
+		uint32_t indexCount = static_cast<uint32_t>(primitive.indices.size());
+		uint32_t firstIndex = indexOffset;
+		Material material = primitive.material;
+
+		_primitives.push_back({
+				indexCount,
+				firstIndex,
+				material,
+		});
+
+		for (uint32_t index : primitive.indices) {
+			indices[indexOffset] = vertexOffset + index;
+			indexOffset++;
+		}
+
+		Vertex *pDst = vertices.data();
+		const Vertex *pSrc = primitive.vertices.data();
+		size_t vertexCount = primitive.vertices.size();
+
+		memcpy(&pDst[vertexOffset], pSrc, sizeof(Vertex) * vertexCount);
+
+		vertexOffset += vertexCount;
+	}
+
+	vk::DeviceSize vertexBufferSize = sizeof(Vertex) * vertices.size();
 	AllocatedBuffer vertexBuffer = _pDevice->bufferCreate(
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			vertexSize);
-	_pDevice->bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexSize);
+			vertexBufferSize);
 
-	vk::DeviceSize indexSize = sizeof(uint32_t) * indices.size();
+	_pDevice->bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexBufferSize);
+
+	vk::DeviceSize indexBufferSize = sizeof(uint32_t) * indices.size();
 	AllocatedBuffer indexBuffer = _pDevice->bufferCreate(
 			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-			indexSize);
-	_pDevice->bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexSize);
+			indexBufferSize);
 
-	PrimitiveRD primitive = {
-		vertexBuffer,
-		indexBuffer,
-		static_cast<uint32_t>(indices.size()),
-		material,
-	};
+	_pDevice->bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexBufferSize);
 
-	_meshes[mesh].primitives.push_back(primitive);
+	return _meshes.insert({
+			vertexBuffer,
+			indexBuffer,
+			_primitives,
+	});
 }
 
 void RS::meshFree(Mesh mesh) {
@@ -86,10 +122,8 @@ void RS::meshFree(Mesh mesh) {
 		return;
 
 	MeshRD _mesh = result.value();
-	for (PrimitiveRD primitive : _mesh.primitives) {
-		_pDevice->bufferDestroy(primitive.vertexBuffer);
-		_pDevice->bufferDestroy(primitive.indexBuffer);
-	}
+	_pDevice->bufferDestroy(_mesh.vertexBuffer);
+	_pDevice->bufferDestroy(_mesh.indexBuffer);
 }
 
 MeshInstance RenderingServer::meshInstanceCreate() {
@@ -230,26 +264,26 @@ void RenderingServer::draw() {
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
-	for (const auto &[meshInstance, meshInstanceRS] : _meshInstances.map()) {
-		const MeshRD &mesh = _meshes[meshInstanceRS.mesh];
+	for (const auto &[_, meshInstance] : _meshInstances.map()) {
+		const MeshRD &mesh = _meshes[meshInstance.mesh];
+
+		vk::DeviceSize offset = 0;
+		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
+		commandBuffer.bindIndexBuffer(mesh.indexBuffer.buffer, 0, vk::IndexType::eUint32);
 
 		MeshPushConstants constants{};
 		constants.projView = projView;
-		constants.model = meshInstanceRS.transform;
+		constants.model = meshInstance.transform;
 
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
 				0, sizeof(MeshPushConstants), &constants);
 
 		for (const PrimitiveRD &primitive : mesh.primitives) {
 			MaterialRD material = _materials[primitive.material];
-
 			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
 					_pDevice->getPipelineLayout(), 2, material.albedoSet, nullptr);
 
-			vk::DeviceSize offset = 0;
-			commandBuffer.bindVertexBuffers(0, 1, &primitive.vertexBuffer.buffer, &offset);
-			commandBuffer.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-			commandBuffer.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
+			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}
 	}
 

@@ -25,22 +25,28 @@ typedef uint64_t Material;
 #define NULL_HANDLE 0
 
 class RenderingServer {
+public:
+	struct Primitive {
+		std::vector<Vertex> vertices;
+		std::vector<uint32_t> indices;
+		Material material;
+	};
+
 private:
 	struct PrimitiveRD {
-		AllocatedBuffer vertexBuffer;
-		AllocatedBuffer indexBuffer;
 		uint32_t indexCount;
-
+		uint32_t firstIndex;
 		Material material;
 	};
 
 	struct MeshRD {
+		AllocatedBuffer vertexBuffer;
+		AllocatedBuffer indexBuffer;
 		std::vector<PrimitiveRD> primitives;
 	};
 
 	struct MeshInstanceRD {
 		glm::mat4 transform;
-
 		Mesh mesh;
 	};
 
@@ -69,9 +75,7 @@ public:
 	void cameraSetZNear(float zNear);
 	void cameraSetZFar(float zFar);
 
-	Mesh meshCreate();
-	void meshAddPrimitive(Mesh mesh, const std::vector<Vertex> &vertices,
-			const std::vector<uint32_t> &indices, Material material);
+	Mesh meshCreate(const std::vector<Primitive> &primitives);
 	void meshFree(Mesh mesh);
 
 	Mesh meshInstanceCreate();

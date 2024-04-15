@@ -21,6 +21,20 @@ bool Scene::load(std::filesystem::path path, RenderingServer *pRenderingServer) 
 		_materials.push_back(pRenderingServer->materialCreate(albedo));
 	}
 
+	for (const Loader::Mesh &_mesh : pScene->meshes) {
+		std::vector<RS::Primitive> primitives;
+		for (const Loader::Primitive &_primitive : _mesh.primitives) {
+			primitives.push_back({
+					_primitive.vertices,
+					_primitive.indices,
+					_materials[_primitive.materialIndex],
+			});
+		}
+
+		Mesh mesh = pRenderingServer->meshCreate(primitives);
+		_meshes.push_back(mesh);
+	}
+
 	/*
 		for (const Loader::Camera &_camera : pScene->cameras) {
 			pRenderingServer->cameraSetTransform(_camera.transform);
@@ -31,19 +45,9 @@ bool Scene::load(std::filesystem::path path, RenderingServer *pRenderingServer) 
 	*/
 
 	for (const Loader::MeshInstance &_meshInstance : pScene->meshInstances) {
-		Loader::Mesh _mesh = pScene->meshes[_meshInstance.meshIndex];
-		Mesh mesh = pRenderingServer->meshCreate();
-
-		for (const Loader::Primitive &primitive : _mesh.primitives) {
-			pRenderingServer->meshAddPrimitive(mesh, primitive.vertices, primitive.indices,
-					_materials[primitive.materialIndex]);
-		}
-
 		MeshInstance meshInstance = pRenderingServer->meshInstanceCreate();
-		pRenderingServer->meshInstanceSetMesh(meshInstance, mesh);
+		pRenderingServer->meshInstanceSetMesh(meshInstance, _meshes[_meshInstance.meshIndex]);
 		pRenderingServer->meshInstanceSetTransform(meshInstance, _meshInstance.transform);
-
-		_meshes.push_back(mesh);
 		_meshInstances.push_back(meshInstance);
 	}
 

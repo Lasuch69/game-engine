@@ -503,11 +503,11 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 	};
 }
 
-void RenderingDevice::updateUniformBuffer(
-		const glm::mat4 &proj, const glm::mat4 &view, uint32_t lightCount) {
+void RenderingDevice::updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view,
+		const glm::vec3 &viewPosition, uint32_t lightCount) {
 	UniformBufferObject ubo{};
 	ubo.projView = proj * view;
-	ubo.view = view;
+	ubo.viewPosition = viewPosition;
 	ubo.lightCount = lightCount;
 
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));

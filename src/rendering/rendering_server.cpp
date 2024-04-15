@@ -228,18 +228,15 @@ void RenderingServer::draw() {
 	glm::mat4 proj = _camera.projectionMatrix(aspect);
 	glm::mat4 view = _camera.viewMatrix();
 
-	_pDevice->updateUniformBuffer(proj, view, _pointLights.size());
+	_pDevice->updateUniformBuffer(proj, view, _camera.transform[3], _pointLights.size());
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
 	for (const auto &[meshInstance, meshInstanceRS] : _meshInstances.map()) {
 		const MeshRD &mesh = _meshes[meshInstanceRS.mesh];
 
-		glm::mat4 modelView = meshInstanceRS.transform * view;
-
 		MeshPushConstants constants{};
 		constants.model = meshInstanceRS.transform;
-		constants.modelViewNormal = glm::transpose(glm::inverse(modelView));
 
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
 				0, sizeof(MeshPushConstants), &constants);

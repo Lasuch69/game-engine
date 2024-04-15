@@ -1,14 +1,13 @@
 #version 450
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
-    mat4 projView;
-    mat4 view;
-    int lightCount;
+	mat4 projView;
+	vec3 viewPosition;
+	int lightCount;
 } ubo;
 
 layout(push_constant) uniform MeshPushConstants {
-    mat4 model;
-    mat4 modelViewNormal;
+	mat4 model;
 } constants;
 
 layout(location = 0) in vec3 inPosition;
@@ -22,12 +21,12 @@ layout(location = 2) out vec3 outColor;
 layout(location = 3) out vec2 outTexCoord;
 
 void main() {
-    vec4 vertPos4 = ubo.view * constants.model * vec4(inPosition, 1.0);
-    outPosition = vec3(vertPos4) / vertPos4.w;
+	vec4 vertPos4 = constants.model * vec4(inPosition, 1.0);
+	outPosition = vec3(vertPos4) / vertPos4.w;
 
-	outNormal = normalize(mat3(constants.modelViewNormal) * inNormal);
-    outColor = inColor;
-    outTexCoord = inTexCoord;
+	outNormal = normalize(vec3(constants.model * vec4(inNormal, 0.0)));
+	outColor = inColor;
+	outTexCoord = inTexCoord;
 
-    gl_Position = ubo.projView * constants.model * vec4(inPosition, 1.0);
+	gl_Position = ubo.projView * constants.model * vec4(inPosition, 1.0);
 }

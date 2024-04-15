@@ -1,8 +1,11 @@
+#include <SDL2/SDL_scancode.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/geometric.hpp>
 #include <vector>
 
 #include <SDL2/SDL.h>
@@ -27,6 +30,42 @@ std::vector<const char *> getRequiredExtensions() {
 
 	return extensions;
 }
+
+class CameraController {
+	glm::mat4 _transform = glm::mat4(1.0f);
+
+	glm::vec3 _translation = glm::vec3(0.0f);
+	glm::vec3 _rotation = glm::vec3(0.0f);
+
+	RenderingServer *_pRS;
+
+	void _update() {
+		_transform = glm::mat4(1.0f);
+
+		_transform = glm::translate(_transform, _translation);
+		_transform = glm::rotate(_transform, _rotation.x, glm::vec3(0.0, 1.0f, 0.0)); // rotate Y
+		_transform = glm::rotate(_transform, _rotation.y, glm::vec3(1.0f, 0.0, 0.0)); // rotate X
+
+		_pRS->cameraSetTransform(_transform);
+	}
+
+public:
+	void rotate(const glm::vec2 &input) {
+		_rotation -= glm::vec3(input.x, input.y, 0.0);
+		_rotation.y = glm::clamp(_rotation.y, glm::radians(-89.9f), glm::radians(89.9f));
+		_update();
+	}
+
+	void move(const glm::vec2 &input) {
+		_translation += glm::mat3(_transform) * glm::vec3(input.x, 0.0, -input.y);
+		_update();
+	}
+
+	CameraController(RenderingServer *pRenderingServer) {
+		_pRS = pRenderingServer;
+		_update();
+	}
+};
 
 int main(int argc, char *argv[]) {
 	SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
@@ -55,6 +94,8 @@ int main(int argc, char *argv[]) {
 
 	Scene *pScene = new Scene;
 
+	CameraController cameraController(pRS);
+
 	for (int i = 1; i < argc; i++) {
 		// --scene <path>
 		if (strcmp("--scene", argv[i]) == 0 && i < argc - 1) {
@@ -63,8 +104,19 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	uint64_t now = SDL_GetPerformanceCounter();
+	uint64_t last = 0;
+	float deltaTime = 0;
+
+	SDL_SetRelativeMouseMode(SDL_TRUE);
+
 	bool quit = false;
 	while (!quit) {
+		last = now;
+		now = SDL_GetPerformanceCounter();
+
+		deltaTime = ((now - last) / (float)SDL_GetPerformanceFrequency());
+
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT) {
@@ -90,6 +142,21 @@ int main(int argc, char *argv[]) {
 				pScene->load(path, pRS);
 			}
 		}
+
+		int x, y;
+		SDL_GetRelativeMouseState(&x, &y);
+
+		const uint8_t *keys = SDL_GetKeyboardState(nullptr);
+
+		glm::vec2 input = {
+			keys[SDL_SCANCODE_D] - keys[SDL_SCANCODE_A],
+			keys[SDL_SCANCODE_W] - keys[SDL_SCANCODE_S],
+		};
+
+		input *= 3.0f;
+
+		cameraController.rotate(glm::vec2(x, y) * 0.005f);
+		cameraController.move(input * deltaTime);
 
 		pRS->draw();
 	}

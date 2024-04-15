@@ -21,12 +21,14 @@ bool Scene::load(std::filesystem::path path, RenderingServer *pRenderingServer) 
 		_materials.push_back(pRenderingServer->materialCreate(albedo));
 	}
 
-	for (const Loader::Camera &_camera : pScene->cameras) {
-		pRenderingServer->cameraSetTransform(_camera.transform);
-		pRenderingServer->cameraSetFovY(_camera.fovY);
-		pRenderingServer->cameraSetZNear(_camera.zNear);
-		pRenderingServer->cameraSetZFar(_camera.zFar);
-	}
+	/*
+		for (const Loader::Camera &_camera : pScene->cameras) {
+			pRenderingServer->cameraSetTransform(_camera.transform);
+			pRenderingServer->cameraSetFovY(_camera.fovY);
+			pRenderingServer->cameraSetZNear(_camera.zNear);
+			pRenderingServer->cameraSetZFar(_camera.zFar);
+		}
+	*/
 
 	for (const Loader::MeshInstance &_meshInstance : pScene->meshInstances) {
 		Loader::Mesh _mesh = pScene->meshes[_meshInstance.meshIndex];

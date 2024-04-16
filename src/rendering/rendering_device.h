@@ -16,12 +16,12 @@ const int FRAMES_IN_FLIGHT = 2;
 const int MAX_LIGHT_COUNT = 8;
 
 struct UniformBufferObject {
-	glm::mat4 projView;
 	glm::vec3 viewPosition;
 	uint32_t lightCount;
 };
 
 struct MeshPushConstants {
+	glm::mat4 projView;
 	glm::mat4 model;
 };
 
@@ -107,8 +107,7 @@ public:
 
 	TextureRD textureCreate(Image *pImage);
 
-	void updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view,
-			const glm::vec3 &viewPosition, uint32_t lightCount);
+	void updateUniformBuffer(const glm::vec3 &viewPosition, uint32_t lightCount);
 	void updateLightBuffer(uint8_t *pData, size_t size);
 
 	vk::Instance getInstance() const;

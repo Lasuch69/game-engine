@@ -223,12 +223,10 @@ void RS::materialFree(Material material) {
 }
 
 void RenderingServer::draw() {
+	_pDevice->updateUniformBuffer(_camera.transform[3], _pointLights.size());
+
 	float aspect = static_cast<float>(_width) / static_cast<float>(_height);
-
-	glm::mat4 proj = _camera.projectionMatrix(aspect);
-	glm::mat4 view = _camera.viewMatrix();
-
-	_pDevice->updateUniformBuffer(proj, view, _camera.transform[3], _pointLights.size());
+	glm::mat4 projView = _camera.projectionMatrix(aspect) * _camera.viewMatrix();
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
@@ -236,6 +234,7 @@ void RenderingServer::draw() {
 		const MeshRD &mesh = _meshes[meshInstanceRS.mesh];
 
 		MeshPushConstants constants{};
+		constants.projView = projView;
 		constants.model = meshInstanceRS.transform;
 
 		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,

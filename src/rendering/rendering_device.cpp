@@ -503,10 +503,8 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 	};
 }
 
-void RenderingDevice::updateUniformBuffer(const glm::mat4 &proj, const glm::mat4 &view,
-		const glm::vec3 &viewPosition, uint32_t lightCount) {
+void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition, uint32_t lightCount) {
 	UniformBufferObject ubo{};
-	ubo.projView = proj * view;
 	ubo.viewPosition = viewPosition;
 	ubo.lightCount = lightCount;
 
@@ -725,8 +723,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 						.setBinding(0)
 						.setDescriptorType(vk::DescriptorType::eUniformBuffer)
 						.setDescriptorCount(1)
-						.setStageFlags(vk::ShaderStageFlagBits::eVertex |
-									   vk::ShaderStageFlagBits::eFragment);
+						.setStageFlags(vk::ShaderStageFlagBits::eFragment);
 
 		vk::DescriptorSetLayoutCreateInfo createInfo =
 				vk::DescriptorSetLayoutCreateInfo().setBindings(binding);

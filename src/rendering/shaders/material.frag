@@ -1,11 +1,5 @@
 #version 450
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-	mat4 projView;
-	vec3 viewPosition;
-	int lightCount;
-} ubo;
-
 struct LightData {
 	vec3 position;
 	float range;
@@ -13,9 +7,14 @@ struct LightData {
 	float intensity;
 };
 
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+	vec3 viewPosition;
+	int lightCount;
+};
+
 layout(set = 1, binding = 0) readonly buffer LightDataBuffer {
-	LightData data[];
-} lights;
+	LightData lights[];
+};
 
 layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
 
@@ -71,21 +70,21 @@ void main() {
 	vec3 albedo = texture(albedoTexture, inTexCoord).rgb;
 
 	vec3 N = normalize(inNormal);
-	vec3 V = normalize(ubo.viewPosition - inPosition);
+	vec3 V = normalize(viewPosition - inPosition);
 
 	vec3 F0 = vec3(0.04);
 	F0 = mix(F0, albedo, metallic);
 
 	vec3 Lo = vec3(0.0);
-	for (int i = 0; i < ubo.lightCount; i++) {
-		vec3 lightPos = lights.data[i].position;
-		vec3 lightColor = lights.data[i].color;
-		float intensity = lights.data[i].intensity;
+	for (int i = 0; i < lightCount; i++) {
+		vec3 lightPosition = lights[i].position;
+		vec3 lightColor = lights[i].color;
+		float intensity = lights[i].intensity;
 
 		// calculate per-light radiance
-		vec3 L = normalize(lightPos - inPosition);
+		vec3 L = normalize(lightPosition - inPosition);
 		vec3 H = normalize(V + L);
-		float distance = length(lightPos - inPosition);
+		float distance = length(lightPosition - inPosition);
 		float attenuation = 1.0 / (distance * distance);
 		vec3 radiance = lightColor * attenuation;
 

@@ -300,29 +300,7 @@ void RenderingDevice::_generateMipmaps(
 
 AllocatedBuffer RenderingDevice::bufferCreate(
 		vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo) {
-	VkBufferCreateInfo createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	createInfo.size = size;
-	createInfo.usage = static_cast<VkBufferUsageFlags>(usage);
-
-	VmaAllocationCreateInfo allocCreateInfo{};
-	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-							VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-	VkBuffer buffer;
-	VmaAllocation allocation;
-
-	if (pAllocInfo == nullptr) {
-		VmaAllocationInfo _allocInfo;
-		vmaCreateBuffer(
-				_allocator, &createInfo, &allocCreateInfo, &buffer, &allocation, &_allocInfo);
-	} else {
-		vmaCreateBuffer(
-				_allocator, &createInfo, &allocCreateInfo, &buffer, &allocation, pAllocInfo);
-	}
-
-	return AllocatedBuffer{ allocation, buffer };
+	return AllocatedBuffer::create(_allocator, usage, size, pAllocInfo);
 }
 
 void RenderingDevice::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
@@ -377,31 +355,7 @@ void RenderingDevice::_bufferCopyToImage(
 
 AllocatedImage RenderingDevice::imageCreate(uint32_t width, uint32_t height, vk::Format format,
 		uint32_t mipmaps, vk::ImageUsageFlags usage) {
-	VkImageCreateInfo imageInfo{};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = width;
-	imageInfo.extent.height = height;
-	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = mipmaps;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = static_cast<VkFormat>(format);
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = static_cast<VkImageUsageFlags>(usage);
-	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	VmaAllocationCreateInfo allocCreateInfo = {};
-	allocCreateInfo.usage = VMA_MEMORY_USAGE_AUTO;
-	allocCreateInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
-	allocCreateInfo.priority = 1.0f;
-
-	VmaAllocation allocation;
-	VkImage image;
-	vmaCreateImage(_allocator, &imageInfo, &allocCreateInfo, &image, &allocation, nullptr);
-
-	return AllocatedImage{ allocation, image };
+	return AllocatedImage::create(_allocator, width, height, format, mipmaps, usage);
 }
 
 void RenderingDevice::imageDestroy(AllocatedImage image) {
@@ -757,10 +711,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 			_uniformSets[i] = uniformSets[i];
 
-			vk::DescriptorBufferInfo bufferInfo = vk::DescriptorBufferInfo()
-														  .setBuffer(_uniformBuffers[i].buffer)
-														  .setOffset(0)
-														  .setRange(sizeof(UniformBufferObject));
+			vk::DescriptorBufferInfo bufferInfo = _uniformBuffers[i].getBufferInfo();
 
 			vk::WriteDescriptorSet writeInfo =
 					vk::WriteDescriptorSet()
@@ -839,16 +790,11 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 			printf("Failed to allocate light set!\n");
 		}
 
-		vk::DeviceSize bufferSize = sizeof(PointLightRD) * MAX_LIGHT_COUNT;
-
 		_lightBuffer = bufferCreate(
 				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-				bufferSize);
+				sizeof(PointLightRD) * MAX_LIGHT_COUNT);
 
-		vk::DescriptorBufferInfo bufferInfo = vk::DescriptorBufferInfo()
-													  .setBuffer(_lightBuffer.buffer)
-													  .setOffset(0)
-													  .setRange(bufferSize);
+		vk::DescriptorBufferInfo bufferInfo = _lightBuffer.getBufferInfo();
 
 		vk::WriteDescriptorSet writeInfo =
 				vk::WriteDescriptorSet()

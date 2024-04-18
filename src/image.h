@@ -14,7 +14,9 @@ struct Color {
 class Image {
 public:
 	enum class Format {
+		R8,
 		L8,
+		RG8,
 		LA8,
 		RGB8,
 		RGBA8,
@@ -25,6 +27,8 @@ private:
 	Format _format = Format::L8;
 	std::vector<uint8_t> _data = {};
 
+	Image *_create(Format format) const;
+
 public:
 	static Image::Format getFormatFromChannels(uint32_t channels);
 	static uint32_t getChannelsFromFormat(Image::Format format);
@@ -32,7 +36,8 @@ public:
 	Color getPixel(uint32_t idx) const;
 	void setPixel(uint32_t idx, const Color &color);
 
-	Image *createL8() const;
+	Image *createR8() const;
+	Image *createRG8() const;
 	Image *createRGBA8() const;
 
 	uint32_t getWidth() const;

@@ -423,7 +423,24 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
-	vk::Format format = vk::Format::eR8G8B8A8Unorm;
+	vk::Format format = vk::Format::eUndefined;
+
+	switch (pImage->getFormat()) {
+		case Image::Format::R8:
+		case Image::Format::L8:
+			format = vk::Format::eR8Unorm;
+			break;
+		case Image::Format::RG8:
+		case Image::Format::LA8:
+			format = vk::Format::eR8G8Unorm;
+			break;
+		case Image::Format::RGB8:
+			format = vk::Format::eR8G8B8Unorm;
+			break;
+		case Image::Format::RGBA8:
+			format = vk::Format::eR8G8B8A8Unorm;
+			break;
+	}
 
 	AllocatedImage image = imageCreate(width, height, format, mipLevels,
 			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
@@ -811,15 +828,26 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 	// textures
 
 	{
-		vk::DescriptorSetLayoutBinding binding =
-				vk::DescriptorSetLayoutBinding()
-						.setBinding(0)
-						.setDescriptorCount(1)
-						.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-						.setStageFlags(vk::ShaderStageFlagBits::eFragment);
+		std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {
+			vk::DescriptorSetLayoutBinding()
+					.setBinding(0)
+					.setDescriptorCount(1)
+					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+					.setStageFlags(vk::ShaderStageFlagBits::eFragment),
+			vk::DescriptorSetLayoutBinding()
+					.setBinding(1)
+					.setDescriptorCount(1)
+					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+					.setStageFlags(vk::ShaderStageFlagBits::eFragment),
+			vk::DescriptorSetLayoutBinding()
+					.setBinding(2)
+					.setDescriptorCount(1)
+					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+					.setStageFlags(vk::ShaderStageFlagBits::eFragment)
+		};
 
-		vk::DescriptorSetLayoutCreateInfo createInfo =
-				vk::DescriptorSetLayoutCreateInfo().setBindings(binding);
+		vk::DescriptorSetLayoutCreateInfo createInfo = {};
+		createInfo.setBindings(bindings);
 
 		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_textureLayout);
 

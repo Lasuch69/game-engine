@@ -195,11 +195,6 @@ Texture RS::textureCreate(Image *pImage) {
 	if (pImage == nullptr)
 		return NULL_HANDLE;
 
-	if (pImage->getFormat() != Image::Format::RGBA8) {
-		std::cout << "Image format RGBA8 is required to create texture!" << std::endl;
-		return NULL_HANDLE;
-	}
-
 	TextureRD _texture = _pDevice->textureCreate(pImage);
 	return _textures.insert(_texture);
 }
@@ -216,11 +211,21 @@ void RS::textureFree(Texture texture) {
 	_pDevice->samplerDestroy(_texture.sampler);
 }
 
-Material RS::materialCreate(Texture albedoTexture) {
-	if (!_textures.has(albedoTexture))
-		albedoTexture = _whiteTexture;
+Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
+	if (!_textures.has(albedo))
+		albedo = _whiteTexture;
 
-	TextureRD _albedoTexture = _textures[albedoTexture];
+	TextureRD _albedo = _textures[albedo];
+
+	if (!_textures.has(normal))
+		normal = _whiteTexture;
+
+	TextureRD _normal = _textures[normal];
+
+	if (!_textures.has(roughness))
+		roughness = _whiteTexture;
+
+	TextureRD _roughness = _textures[roughness];
 
 	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
 
@@ -230,26 +235,50 @@ Material RS::materialCreate(Texture albedoTexture) {
 					.setDescriptorSetCount(1)
 					.setSetLayouts(textureLayout);
 
-	VkDescriptorSet albedoSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
+	VkDescriptorSet textureSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
 
-	vk::DescriptorImageInfo imageInfo =
-			vk::DescriptorImageInfo()
-					.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-					.setImageView(_albedoTexture.imageView)
-					.setSampler(_albedoTexture.sampler);
+	std::array<vk::DescriptorImageInfo, 3> imageInfos = {
+		vk::DescriptorImageInfo()
+				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+				.setImageView(_albedo.imageView)
+				.setSampler(_albedo.sampler),
+		vk::DescriptorImageInfo()
+				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+				.setImageView(_normal.imageView)
+				.setSampler(_normal.sampler),
+		vk::DescriptorImageInfo()
+				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+				.setImageView(_roughness.imageView)
+				.setSampler(_roughness.sampler),
+	};
 
-	vk::WriteDescriptorSet writeInfo =
-			vk::WriteDescriptorSet()
-					.setDstSet(albedoSet)
-					.setDstBinding(0)
-					.setDstArrayElement(0)
-					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-					.setDescriptorCount(1)
-					.setImageInfo(imageInfo);
+	std::array<vk::WriteDescriptorSet, 3> writeInfos = {
+		vk::WriteDescriptorSet()
+				.setDstSet(textureSet)
+				.setDstBinding(0)
+				.setDstArrayElement(0)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setDescriptorCount(1)
+				.setImageInfo(imageInfos[0]),
+		vk::WriteDescriptorSet()
+				.setDstSet(textureSet)
+				.setDstBinding(1)
+				.setDstArrayElement(0)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setDescriptorCount(1)
+				.setImageInfo(imageInfos[1]),
+		vk::WriteDescriptorSet()
+				.setDstSet(textureSet)
+				.setDstBinding(2)
+				.setDstArrayElement(0)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setDescriptorCount(1)
+				.setImageInfo(imageInfos[2]),
+	};
 
-	_pDevice->getDevice().updateDescriptorSets(writeInfo, nullptr);
+	_pDevice->getDevice().updateDescriptorSets(writeInfos, nullptr);
 
-	return _materials.insert({ albedoSet });
+	return _materials.insert({ textureSet });
 }
 
 void RS::materialFree(Material material) {
@@ -281,7 +310,7 @@ void RenderingServer::draw() {
 		for (const PrimitiveRD &primitive : mesh.primitives) {
 			MaterialRD material = _materials[primitive.material];
 			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-					_pDevice->getPipelineLayout(), 2, material.albedoSet, nullptr);
+					_pDevice->getPipelineLayout(), 2, material.textureSet, nullptr);
 
 			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}

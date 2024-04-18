@@ -17,18 +17,30 @@ layout(set = 1, binding = 0) readonly buffer LightDataBuffer {
 };
 
 layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
+layout(set = 2, binding = 1) uniform sampler2D normalTexture;
+layout(set = 2, binding = 2) uniform sampler2D roughnessTexture;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inColor;
+layout(location = 2) in vec3 inTangent;
 layout(location = 3) in vec2 inTexCoord;
+
+layout(location = 4) in vec3 inBitangent;
 
 layout(location = 0) out vec4 fragColor;
 
 const float PI = 3.14159265359;
 
-const float roughness = 0.5f;
 const float metallic = 0.0f;
+
+float saturate(float n) {
+	return clamp(n, 0.0, 1.0);
+}
+
+vec3 deriveNormalZ(vec2 n) {
+	float z = sqrt(1.0 - saturate(dot(n, n)));
+	return vec3(n.x, n.y, z);
+}
 
 float distributionGGX(vec3 N, vec3 H, float roughness) {
 	float a = roughness * roughness;
@@ -68,8 +80,17 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 void main() {
 	vec3 albedo = texture(albedoTexture, inTexCoord).rgb;
+	vec3 normal = texture(normalTexture, inTexCoord).xyz;
+	float roughness = texture(roughnessTexture, inTexCoord).r;
 
-	vec3 N = normalize(inNormal);
+	// map from [0, 1] to [-1, +1] range
+	normal = normal * 2.0 - vec3(1.0);
+	normal = deriveNormalZ(normal.xy);
+
+	// tangent space to world space
+	normal = mat3(inTangent, inBitangent, inNormal) * normal;
+
+	vec3 N = normalize(normal);
 	vec3 V = normalize(viewPosition - inPosition);
 
 	vec3 F0 = vec3(0.04);

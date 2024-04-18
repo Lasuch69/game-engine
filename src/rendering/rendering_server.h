@@ -51,7 +51,7 @@ private:
 	};
 
 	struct MaterialRD {
-		vk::DescriptorSet albedoSet;
+		vk::DescriptorSet textureSet;
 	};
 
 	bool _useValidation = false;
@@ -93,7 +93,8 @@ public:
 	Texture textureCreate(Image *pImage);
 	void textureFree(Texture texture);
 
-	Material materialCreate(Texture albedo = NULL_HANDLE);
+	Material materialCreate(Texture albedo = NULL_HANDLE, Texture normal = NULL_HANDLE,
+			Texture roughness = NULL_HANDLE);
 	void materialFree(Material material);
 
 	void draw();

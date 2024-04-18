@@ -103,6 +103,48 @@ Image *_loadImage(fastgltf::Asset *pAsset, fastgltf::Image &gltfImage,
 	return new Image(width, height, channels, data);
 }
 
+void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex> &vertices) {
+	assert(indices.size() % 3 == 0);
+
+	std::vector<float> avg(vertices.size());
+
+	for (size_t i = 0; i < indices.size(); i += 3) {
+		Vertex &v0 = vertices[indices[i + 0]];
+		Vertex &v1 = vertices[indices[i + 1]];
+		Vertex &v2 = vertices[indices[i + 2]];
+
+		glm::vec3 pos0 = v0.position;
+		glm::vec3 pos1 = v1.position;
+		glm::vec3 pos2 = v2.position;
+
+		glm::vec2 uv0 = v0.texCoord;
+		glm::vec2 uv1 = v1.texCoord;
+		glm::vec2 uv2 = v2.texCoord;
+
+		glm::vec3 deltaPos1 = pos1 - pos0;
+		glm::vec3 deltaPos2 = pos2 - pos0;
+
+		glm::vec2 deltaUV1 = uv1 - uv0;
+		glm::vec2 deltaUV2 = uv2 - uv0;
+
+		float r = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+		glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
+
+		v0.tangent += tangent;
+		v1.tangent += tangent;
+		v2.tangent += tangent;
+
+		avg[indices[i + 0]] += 1.0;
+		avg[indices[i + 1]] += 1.0;
+		avg[indices[i + 2]] += 1.0;
+	}
+
+	for (size_t i = 0; i < avg.size(); i++) {
+		float denom = 1.0 / avg[i];
+		vertices[i].tangent *= denom;
+	}
+}
+
 Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
 	std::vector<Primitive> primitives = {};
 
@@ -118,11 +160,8 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
 
 		vertices.resize(positionAccessor.count);
 
-		fastgltf::iterateAccessorWithIndex<glm::vec3>(
-				*pAsset, positionAccessor, [&](glm::vec3 position, size_t idx) {
-					vertices[idx].position = position;
-					vertices[idx].color = glm::vec3(1.0f); // default value
-				});
+		fastgltf::iterateAccessorWithIndex<glm::vec3>(*pAsset, positionAccessor,
+				[&](glm::vec3 position, size_t idx) { vertices[idx].position = position; });
 
 		auto *normalIter = primitive.findAttribute("NORMAL");
 		auto &normalAccessor = pAsset->accessors[normalIter->second];
@@ -146,6 +185,8 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
 		indices.resize(indexAccessor.count);
 		fastgltf::iterateAccessor<std::uint32_t>(
 				*pAsset, indexAccessor, [&](std::uint32_t index) { indices[idx++] = index; });
+
+		_generateTangents(indices, vertices);
 
 		size_t materialIndex = primitive.materialIndex.value_or(0);
 
@@ -198,6 +239,31 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			images.push_back(pImage);
 
 			material.albedoIndex = idx;
+		}
+
+		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = gltfMaterial.normalTexture;
+
+		if (normalInfo.has_value()) {
+			fastgltf::Image &gltfImage = pAsset->images[normalInfo->textureIndex];
+			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
+
+			uint32_t idx = images.size();
+			images.push_back(pImage);
+
+			material.normalIndex = idx;
+		}
+
+		const std::optional<fastgltf::TextureInfo> &roughnessInfo =
+				gltfMaterial.pbrData.metallicRoughnessTexture;
+
+		if (roughnessInfo.has_value()) {
+			fastgltf::Image &gltfImage = pAsset->images[roughnessInfo->textureIndex];
+			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
+
+			uint32_t idx = images.size();
+			images.push_back(pImage);
+
+			material.roughnessIndex = idx;
 		}
 
 		materials.push_back(material);

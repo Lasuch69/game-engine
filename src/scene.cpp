@@ -17,6 +17,8 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 
 	for (const Loader::Material &sceneMaterial : scene.materials) {
 		Texture albedoTexture = NULL_HANDLE;
+		Texture normalTexture = NULL_HANDLE;
+		Texture roughnessTexture = NULL_HANDLE;
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
 		if (albedoIndex.has_value()) {
@@ -30,7 +32,30 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			_textures.push_back(albedoTexture);
 		}
 
-		Material material = pRenderingServer->materialCreate(albedoTexture);
+		std::optional<size_t> normalIndex = sceneMaterial.normalIndex;
+		if (normalIndex.has_value()) {
+			Image *pImage = scene.images[normalIndex.value()];
+
+			Image *pNormalImage = pImage->createRG8();
+			normalTexture = pRenderingServer->textureCreate(pNormalImage);
+			free(pNormalImage);
+
+			_textures.push_back(normalTexture);
+		}
+
+		std::optional<size_t> roughnessIndex = sceneMaterial.roughnessIndex;
+		if (roughnessIndex.has_value()) {
+			Image *pImage = scene.images[roughnessIndex.value()];
+
+			Image *pRoughnessImage = pImage->createR8();
+			roughnessTexture = pRenderingServer->textureCreate(pRoughnessImage);
+			free(pRoughnessImage);
+
+			_textures.push_back(roughnessTexture);
+		}
+
+		Material material =
+				pRenderingServer->materialCreate(albedoTexture, normalTexture, roughnessTexture);
 		_materials.push_back(material);
 	}
 

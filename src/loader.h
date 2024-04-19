@@ -3,67 +3,63 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <vector>
 
-#include "rendering/types/vertex.h"
-
 #include "image.h"
+#include "rendering/types/vertex.h"
 
 namespace Loader {
 
-struct Camera {
-	std::string name;
-	glm::mat4 transform;
-	float fovY;
-	float zNear;
-	float zFar;
+enum class LightType {
+	Point,
 };
 
 struct Primitive {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
-	size_t materialIndex;
-};
-
-struct Mesh {
-	std::string name;
-	std::vector<Primitive> primitives;
-};
-
-struct MeshInstance {
-	std::string name;
-	glm::mat4 transform;
-	size_t meshIndex;
-};
-
-struct PointLight {
-	std::string name;
-	glm::vec3 position;
-	glm::vec3 color;
-	float intensity;
-	float range;
+	uint64_t materialIndex;
 };
 
 struct Material {
-	size_t albedoIndex;
-};
-
-struct SceneGlTF {
+	std::optional<uint64_t> albedoIndex;
+	std::optional<uint64_t> normalIndex;
+	std::optional<uint64_t> roughnessIndex;
 	std::string name;
-	glm::mat4 transform;
-
-	std::vector<Material> materials;
-	std::vector<Image *> images;
-
-	std::vector<Mesh> meshes;
-
-	std::vector<Camera> cameras;
-	std::vector<MeshInstance> meshInstances;
-	std::vector<PointLight> pointLights;
 };
 
-SceneGlTF *loadGltf(std::filesystem::path path);
+struct Mesh {
+	std::vector<Primitive> primitives;
+	std::string name;
+};
+
+struct MeshInstance {
+	glm::mat4 transform;
+	uint64_t meshIndex;
+	std::string name;
+};
+
+struct Light {
+	glm::mat4 transform;
+	LightType type;
+
+	glm::vec3 color;
+	float intensity;
+
+	std::optional<float> range;
+	std::string name;
+};
+
+struct Scene {
+	std::vector<Image *> images;
+	std::vector<Material> materials;
+	std::vector<Mesh> meshes;
+	std::vector<MeshInstance> meshInstances;
+	std::vector<Light> lights;
+};
+
+std::optional<Scene> loadGltf(const std::filesystem::path &path);
 
 } // namespace Loader
 

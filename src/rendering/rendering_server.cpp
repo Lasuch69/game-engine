@@ -304,10 +304,11 @@ void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_width = width;
 	_height = height;
 
-	Image *pImage = Image::create(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 });
+	Image *pImage = new Image(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 });
 
 	// create fallback white texture
 	_whiteTexture = textureCreate(pImage);
+	free(pImage);
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {

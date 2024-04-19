@@ -17,7 +17,7 @@ private:
 	std::vector<PointLight> _pointLights;
 
 public:
-	bool load(std::filesystem::path path, RenderingServer *pRenderingServer);
+	bool load(const std::filesystem::path &path, RenderingServer *pRenderingServer);
 	void clear(RenderingServer *pRenderingServer);
 };
 

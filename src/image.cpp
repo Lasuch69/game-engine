@@ -1,9 +1,33 @@
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
 #include "image.h"
 
-size_t _formatPixelSize(Image::Format format) {
+uint8_t Color::getLuminance() const {
+	float _r = static_cast<float>(r) * 0.2126f;
+	float _g = static_cast<float>(g) * 0.7152f;
+	float _b = static_cast<float>(b) * 0.0722f;
+
+	return std::round(_r + _g + _b);
+}
+
+Image::Format Image::getFormatFromChannels(uint32_t channels) {
+	switch (channels) {
+		case 1:
+			return Image::Format::L8;
+		case 2:
+			return Image::Format::LA8;
+		case 3:
+			return Image::Format::RGB8;
+		case 4:
+			return Image::Format::RGBA8;
+	}
+
+	return Image::Format::L8;
+}
+
+uint32_t Image::getChannelsFromFormat(Image::Format format) {
 	switch (format) {
 		case Image::Format::L8:
 			return 1;
@@ -15,25 +39,99 @@ size_t _formatPixelSize(Image::Format format) {
 			return 4;
 	}
 
-	return 0;
+	return 1;
 }
 
-Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
-	_width = width;
-	_height = height;
-	_format = format;
-	_data = data;
-}
+Color Image::getPixel(uint32_t idx) const {
+	uint32_t i = idx * getChannelsFromFormat(_format);
 
-Image *Image::create(
-		uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
-	size_t size = width * height * _formatPixelSize(format);
+	Color color = {};
 
-	if (size == data.size()) {
-		return new Image(width, height, format, data);
+	switch (_format) {
+		case Format::L8:
+			color.r = _data[i + 0];
+			break;
+		case Format::LA8:
+			color.r = _data[i + 0];
+			color.a = _data[i + 1];
+			break;
+		case Format::RGB8:
+			color.r = _data[i + 0];
+			color.g = _data[i + 1];
+			color.b = _data[i + 2];
+			break;
+		case Format::RGBA8:
+			color.r = _data[i + 0];
+			color.g = _data[i + 1];
+			color.b = _data[i + 2];
+			color.a = _data[i + 3];
+			break;
 	}
 
-	return nullptr;
+	return color;
+}
+
+void Image::setPixel(uint32_t idx, const Color &color) {
+	uint32_t i = idx * getChannelsFromFormat(_format);
+
+	switch (_format) {
+		case Format::L8:
+			_data[i + 0] = color.r;
+			break;
+		case Format::LA8:
+			_data[i + 0] = color.r;
+			_data[i + 1] = color.a;
+			break;
+		case Format::RGB8:
+			_data[i + 0] = color.r;
+			_data[i + 1] = color.g;
+			_data[i + 2] = color.b;
+			break;
+		case Format::RGBA8:
+			_data[i + 0] = color.r;
+			_data[i + 1] = color.g;
+			_data[i + 2] = color.b;
+			_data[i + 3] = color.a;
+			break;
+	}
+}
+
+Image *Image::createL8() const {
+	uint32_t pixelCount = _width * _height;
+	uint32_t channels = getChannelsFromFormat(Format::L8);
+
+	std::vector<uint8_t> data(pixelCount * channels);
+
+	Image *pImage = new Image(_width, _height, Format::L8, data);
+
+	bool isLum = _format == Format::L8 || _format == Format::LA8;
+
+	for (uint32_t i = 0; i < pixelCount; i++) {
+		Color c = getPixel(i);
+
+		if (!isLum)
+			c.r = c.getLuminance();
+
+		pImage->setPixel(i, c);
+	}
+
+	return pImage;
+}
+
+Image *Image::createRGBA8() const {
+	uint32_t pixelCount = _width * _height;
+	uint32_t channels = getChannelsFromFormat(Format::RGBA8);
+
+	std::vector<uint8_t> data(pixelCount * channels);
+
+	Image *pImage = new Image(_width, _height, Format::RGBA8, data);
+
+	for (uint32_t i = 0; i < pixelCount; i++) {
+		Color c = getPixel(i);
+		pImage->setPixel(i, c);
+	}
+
+	return pImage;
 }
 
 uint32_t Image::getWidth() const {
@@ -48,10 +146,22 @@ Image::Format Image::getFormat() const {
 	return _format;
 }
 
-uint64_t Image::getPixelSize() const {
-	return _formatPixelSize(_format);
-}
-
 const std::vector<uint8_t> &Image::getData() const {
 	return _data;
+}
+
+Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
+	_width = width;
+	_height = height;
+	_format = format;
+	_data = data;
+}
+
+Image::Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data) {
+	Image::Format format = getFormatFromChannels(channels);
+
+	_width = width;
+	_height = height;
+	_format = format;
+	_data = data;
 }

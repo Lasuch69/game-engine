@@ -4,6 +4,13 @@
 #include <cstdint>
 #include <vector>
 
+struct Color {
+	uint8_t r, g, b = 0;
+	uint8_t a = 255;
+
+	uint8_t getLuminance() const;
+};
+
 class Image {
 public:
 	enum class Format {
@@ -18,19 +25,24 @@ private:
 	Format _format = Format::L8;
 	std::vector<uint8_t> _data = {};
 
-	Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);
-
 public:
-	static Image *create(
-			uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);
+	static Image::Format getFormatFromChannels(uint32_t channels);
+	static uint32_t getChannelsFromFormat(Image::Format format);
+
+	Color getPixel(uint32_t idx) const;
+	void setPixel(uint32_t idx, const Color &color);
+
+	Image *createL8() const;
+	Image *createRGBA8() const;
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;
-
 	Format getFormat() const;
 
 	const std::vector<uint8_t> &getData() const;
-	size_t getPixelSize() const;
+
+	Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);
+	Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data);
 };
 
 #endif // !IMAGE_H

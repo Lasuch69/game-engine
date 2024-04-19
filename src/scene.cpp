@@ -1,67 +1,92 @@
-#include "scene.h"
+#include <cstdint>
+#include <filesystem>
+#include <iostream>
+#include <optional>
 
 #include "loader.h"
 
-bool Scene::load(std::filesystem::path path, RenderingServer *pRenderingServer) {
-	Loader::SceneGlTF *pScene = Loader::loadGltf(path);
+#include "scene.h"
 
-	if (pScene == nullptr) {
+bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingServer) {
+	std::optional<Loader::Scene> result = Loader::loadGltf(path);
+
+	if (!result.has_value())
 		return false;
+
+	Loader::Scene scene = result.value();
+
+	for (const Loader::Material &sceneMaterial : scene.materials) {
+		Texture albedoTexture = NULL_HANDLE;
+
+		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
+		if (albedoIndex.has_value()) {
+			Image *pImage = scene.images[albedoIndex.value()];
+
+			// Make sure we use RGBA8, because RGB8 is not suitable for textures.
+			Image *pAlbedoImage = pImage->createRGBA8();
+			albedoTexture = pRenderingServer->textureCreate(pAlbedoImage);
+			free(pAlbedoImage);
+
+			_textures.push_back(albedoTexture);
+		}
+
+		Material material = pRenderingServer->materialCreate(albedoTexture);
+		_materials.push_back(material);
 	}
 
-	for (Image *pImage : pScene->images) {
-		Texture texture = pRenderingServer->textureCreate(pImage);
-		_textures.push_back(texture);
-
-		free(pImage);
-	}
-
-	for (const Loader::Material &_material : pScene->materials) {
-		Texture albedo = _textures[_material.albedoIndex];
-		_materials.push_back(pRenderingServer->materialCreate(albedo));
-	}
-
-	for (const Loader::Mesh &_mesh : pScene->meshes) {
+	for (const Loader::Mesh &sceneMesh : scene.meshes) {
 		std::vector<RS::Primitive> primitives;
-		for (const Loader::Primitive &_primitive : _mesh.primitives) {
-			primitives.push_back({
-					_primitive.vertices,
-					_primitive.indices,
-					_materials[_primitive.materialIndex],
-			});
+		for (const Loader::Primitive &meshPrimitive : sceneMesh.primitives) {
+			uint64_t materialIndex = meshPrimitive.materialIndex;
+			Material material = _materials[materialIndex];
+
+			RS::Primitive primitive = {};
+			primitive.vertices = meshPrimitive.vertices;
+			primitive.indices = meshPrimitive.indices;
+			primitive.material = material;
+
+			primitives.push_back(primitive);
 		}
 
 		Mesh mesh = pRenderingServer->meshCreate(primitives);
 		_meshes.push_back(mesh);
 	}
 
-	/*
-		for (const Loader::Camera &_camera : pScene->cameras) {
-			pRenderingServer->cameraSetTransform(_camera.transform);
-			pRenderingServer->cameraSetFovY(_camera.fovY);
-			pRenderingServer->cameraSetZNear(_camera.zNear);
-			pRenderingServer->cameraSetZFar(_camera.zFar);
-		}
-	*/
+	for (const Loader::MeshInstance &sceneMeshInstance : scene.meshInstances) {
+		uint64_t meshIndex = sceneMeshInstance.meshIndex;
 
-	for (const Loader::MeshInstance &_meshInstance : pScene->meshInstances) {
+		Mesh mesh = _meshes[meshIndex];
+		glm::mat4 transform = sceneMeshInstance.transform;
+
 		MeshInstance meshInstance = pRenderingServer->meshInstanceCreate();
-		pRenderingServer->meshInstanceSetMesh(meshInstance, _meshes[_meshInstance.meshIndex]);
-		pRenderingServer->meshInstanceSetTransform(meshInstance, _meshInstance.transform);
+		pRenderingServer->meshInstanceSetMesh(meshInstance, mesh);
+		pRenderingServer->meshInstanceSetTransform(meshInstance, transform);
+
 		_meshInstances.push_back(meshInstance);
 	}
 
-	for (const Loader::PointLight &_pointLight : pScene->pointLights) {
+	for (const Loader::Light &sceneLight : scene.lights) {
+		if (sceneLight.type != Loader::LightType::Point)
+			continue;
+
+		glm::vec3 position = glm::vec3(sceneLight.transform[3]);
+		float range = sceneLight.range.value_or(0.0f);
+		glm::vec3 color = sceneLight.color;
+		float intensity = sceneLight.intensity;
+
 		PointLight pointLight = pRenderingServer->pointLightCreate();
-		pRenderingServer->pointLightSetPosition(pointLight, _pointLight.position);
-		pRenderingServer->pointLightSetRange(pointLight, _pointLight.range);
-		pRenderingServer->pointLightSetColor(pointLight, _pointLight.color);
-		pRenderingServer->pointLightSetIntensity(pointLight, _pointLight.intensity);
+		pRenderingServer->pointLightSetPosition(pointLight, position);
+		pRenderingServer->pointLightSetRange(pointLight, range);
+		pRenderingServer->pointLightSetColor(pointLight, color);
+		pRenderingServer->pointLightSetIntensity(pointLight, intensity);
 
 		_pointLights.push_back(pointLight);
 	}
 
-	free(pScene);
+	for (Image *pImage : scene.images) {
+		free(pImage);
+	}
+
 	return true;
 }
 

@@ -108,6 +108,8 @@ void main() {
 		vec3 lightColor = lights[i].color;
 		float intensity = lights[i].intensity;
 
+		lightColor *= intensity;
+
 		// calculate per-light radiance
 		vec3 L = normalize(lightPosition - inPosition);
 		vec3 H = normalize(V + L);

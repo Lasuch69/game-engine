@@ -78,8 +78,14 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
+vec3 sRGBToLinear(vec3 c) {
+	return pow(c, vec3(2.2));
+}
+
 void main() {
 	vec3 albedo = texture(albedoTexture, inTexCoord).rgb;
+	albedo = sRGBToLinear(albedo);
+
 	vec3 normal = texture(normalTexture, inTexCoord).xyz;
 	float roughness = texture(roughnessTexture, inTexCoord).r;
 

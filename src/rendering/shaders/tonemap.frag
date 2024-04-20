@@ -25,9 +25,5 @@ vec3 aces(vec3 color) {
 
 void main() {
 	vec3 color = aces(subpassLoad(inputColor).rgb);
-
-	// Gamma correction
-	color = pow(color, vec3(1.0/2.2));
-
 	fragColor = vec4(color, 1.0);
 }

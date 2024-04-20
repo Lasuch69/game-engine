@@ -293,8 +293,12 @@ void RenderingServer::draw() {
 
 	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
 
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _pDevice->getDepthPipeline());
+
 	for (const auto &[_, meshInstance] : _meshInstances.map()) {
 		const MeshRD &mesh = _meshes[meshInstance.mesh];
+
+		vk::PipelineLayout pipelineLayout = _pDevice->getDepthPipelineLayout();
 
 		vk::DeviceSize offset = 0;
 		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
@@ -304,13 +308,41 @@ void RenderingServer::draw() {
 		constants.projView = projView;
 		constants.model = meshInstance.transform;
 
-		commandBuffer.pushConstants(_pDevice->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex,
-				0, sizeof(MeshPushConstants), &constants);
+		commandBuffer.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0,
+				sizeof(MeshPushConstants), &constants);
+
+		for (const PrimitiveRD &primitive : mesh.primitives) {
+			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+		}
+	}
+
+	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
+
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _pDevice->getMaterialPipeline());
+
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+			_pDevice->getMaterialPipelineLayout(), 0, _pDevice->getMaterialSets(), nullptr);
+
+	for (const auto &[_, meshInstance] : _meshInstances.map()) {
+		const MeshRD &mesh = _meshes[meshInstance.mesh];
+
+		vk::PipelineLayout pipelineLayout = _pDevice->getMaterialPipelineLayout();
+
+		vk::DeviceSize offset = 0;
+		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
+		commandBuffer.bindIndexBuffer(mesh.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+
+		MeshPushConstants constants{};
+		constants.projView = projView;
+		constants.model = meshInstance.transform;
+
+		commandBuffer.pushConstants(pipelineLayout, vk::ShaderStageFlagBits::eVertex, 0,
+				sizeof(MeshPushConstants), &constants);
 
 		for (const PrimitiveRD &primitive : mesh.primitives) {
 			MaterialRD material = _materials[primitive.material];
-			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-					_pDevice->getPipelineLayout(), 2, material.textureSet, nullptr);
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 2,
+					material.textureSet, nullptr);
 
 			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}

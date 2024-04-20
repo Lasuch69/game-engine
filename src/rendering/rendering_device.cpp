@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <stdexcept>
 
+#include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
 
@@ -40,7 +41,7 @@ void updateInputAttachment(vk::Device device, vk::ImageView imageView, vk::Descr
 vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 		vk::ShaderModule fragmentStage, vk::PipelineLayout pipelineLayout,
 		vk::RenderPass renderPass, uint32_t subpass,
-		vk::PipelineVertexInputStateCreateInfo vertexInput) {
+		vk::PipelineVertexInputStateCreateInfo vertexInput, bool writeDepth = false) {
 	vk::PipelineShaderStageCreateInfo vertexStageInfo =
 			vk::PipelineShaderStageCreateInfo()
 					.setModule(vertexStage)
@@ -80,8 +81,8 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	vk::PipelineDepthStencilStateCreateInfo depthStencil =
 			vk::PipelineDepthStencilStateCreateInfo()
 					.setDepthTestEnable(VK_TRUE)
-					.setDepthWriteEnable(VK_TRUE)
-					.setDepthCompareOp(vk::CompareOp::eLess)
+					.setDepthWriteEnable(writeDepth)
+					.setDepthCompareOp(vk::CompareOp::eLessOrEqual)
 					.setDepthBoundsTestEnable(VK_FALSE)
 					.setStencilTestEnable(VK_FALSE);
 
@@ -494,8 +495,24 @@ vk::Device RenderingDevice::getDevice() const {
 	return _pContext->device;
 }
 
-vk::PipelineLayout RenderingDevice::getPipelineLayout() const {
+vk::PipelineLayout RenderingDevice::getDepthPipelineLayout() const {
+	return _depthLayout;
+}
+
+vk::Pipeline RenderingDevice::getDepthPipeline() const {
+	return _depthPipeline;
+}
+
+vk::PipelineLayout RenderingDevice::getMaterialPipelineLayout() const {
 	return _materialLayout;
+}
+
+vk::Pipeline RenderingDevice::getMaterialPipeline() const {
+	return _materialPipeline;
+}
+
+std::array<vk::DescriptorSet, 2> RenderingDevice::getMaterialSets() const {
+	return { _uniformSets[_frame], _lightSet };
 }
 
 vk::DescriptorPool RenderingDevice::getDescriptorPool() const {
@@ -563,12 +580,6 @@ vk::CommandBuffer RenderingDevice::drawBegin() {
 
 	commandBuffer.setViewport(0, viewport);
 	commandBuffer.setScissor(0, scissor);
-
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _materialPipeline);
-
-	std::array<vk::DescriptorSet, 2> descriptorSets = { _uniformSets[_frame], _lightSet };
-	commandBuffer.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics, _materialLayout, 0, descriptorSets, nullptr);
 
 	return commandBuffer;
 }
@@ -856,6 +867,40 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 		}
 	}
 
+	vk::PushConstantRange pushConstant =
+			vk::PushConstantRange(vk::ShaderStageFlagBits::eVertex, 0, sizeof(MeshPushConstants));
+
+	vk::VertexInputBindingDescription binding = Vertex::getBindingDescription();
+	std::array<vk::VertexInputAttributeDescription, 4> attribute =
+			Vertex::getAttributeDescriptions();
+
+	vk::PipelineVertexInputStateCreateInfo vertexInput =
+			vk::PipelineVertexInputStateCreateInfo()
+					.setVertexBindingDescriptions(binding)
+					.setVertexAttributeDescriptions(attribute);
+
+	// depth
+
+	{
+		DepthShader shader;
+
+		vk::ShaderModule vertexStage =
+				createShaderModule(device, shader.vertexCode, sizeof(shader.vertexCode));
+
+		vk::ShaderModule fragmentStage =
+				createShaderModule(device, shader.fragmentCode, sizeof(shader.fragmentCode));
+
+		vk::PipelineLayoutCreateInfo createInfo = {};
+		createInfo.setPushConstantRanges(pushConstant);
+
+		_depthLayout = device.createPipelineLayout(createInfo);
+		_depthPipeline = createPipeline(device, vertexStage, fragmentStage, _depthLayout,
+				_pContext->renderPass, 0, vertexInput, true);
+
+		device.destroyShaderModule(vertexStage);
+		device.destroyShaderModule(fragmentStage);
+	}
+
 	// material
 
 	{
@@ -873,25 +918,13 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 			_textureLayout,
 		};
 
-		vk::PushConstantRange pushConstant = vk::PushConstantRange(
-				vk::ShaderStageFlagBits::eVertex, 0, sizeof(MeshPushConstants));
-
 		vk::PipelineLayoutCreateInfo createInfo =
 				vk::PipelineLayoutCreateInfo().setSetLayouts(layouts).setPushConstantRanges(
 						pushConstant);
 
-		vk::VertexInputBindingDescription binding = Vertex::getBindingDescription();
-		std::array<vk::VertexInputAttributeDescription, 4> attribute =
-				Vertex::getAttributeDescriptions();
-
-		vk::PipelineVertexInputStateCreateInfo vertexInput =
-				vk::PipelineVertexInputStateCreateInfo()
-						.setVertexBindingDescriptions(binding)
-						.setVertexAttributeDescriptions(attribute);
-
 		_materialLayout = device.createPipelineLayout(createInfo);
 		_materialPipeline = createPipeline(device, vertexStage, fragmentStage, _materialLayout,
-				_pContext->renderPass, 0, vertexInput);
+				_pContext->renderPass, 1, vertexInput);
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);
@@ -913,7 +946,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 		_tonemapLayout = device.createPipelineLayout(createInfo);
 		_tonemapPipeline = createPipeline(
-				device, vertexStage, fragmentStage, _tonemapLayout, _pContext->renderPass, 1, {});
+				device, vertexStage, fragmentStage, _tonemapLayout, _pContext->renderPass, 2, {});
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);

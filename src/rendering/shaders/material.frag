@@ -29,6 +29,8 @@ layout(location = 4) in vec3 inBitangent;
 
 layout(location = 0) out vec4 fragColor;
 
+layout(early_fragment_tests) in;
+
 const float PI = 3.14159265359;
 
 const float metallic = 0.0f;

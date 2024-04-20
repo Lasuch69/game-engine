@@ -68,6 +68,9 @@ private:
 	VmaAllocationInfo _uniformAllocInfos[FRAMES_IN_FLIGHT];
 	AllocatedBuffer _lightBuffer;
 
+	vk::PipelineLayout _depthLayout;
+	vk::Pipeline _depthPipeline;
+
 	vk::PipelineLayout _materialLayout;
 	vk::Pipeline _materialPipeline;
 
@@ -113,7 +116,13 @@ public:
 	vk::Instance getInstance() const;
 	vk::Device getDevice() const;
 
-	vk::PipelineLayout getPipelineLayout() const;
+	vk::PipelineLayout getDepthPipelineLayout() const;
+	vk::Pipeline getDepthPipeline() const;
+
+	vk::PipelineLayout getMaterialPipelineLayout() const;
+	vk::Pipeline getMaterialPipeline() const;
+
+	std::array<vk::DescriptorSet, 2> getMaterialSets() const;
 
 	vk::DescriptorPool getDescriptorPool() const;
 	vk::DescriptorSetLayout getTextureLayout() const;

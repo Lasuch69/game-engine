@@ -434,7 +434,7 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 				.setFormat(depthFormat)
 				.setSamples(vk::SampleCountFlagBits::e1)
 				.setLoadOp(vk::AttachmentLoadOp::eClear)
-				.setStoreOp(vk::AttachmentStoreOp::eDontCare)
+				.setStoreOp(vk::AttachmentStoreOp::eStore)
 				.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare)
 				.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare)
 				.setInitialLayout(vk::ImageLayout::eUndefined)
@@ -453,29 +453,34 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 		vk::AttachmentReference(2, vk::ImageLayout::eDepthStencilAttachmentOptimal),
 	};
 
-	std::array<vk::SubpassDescription, 2> subpasses = {
-		vk::SubpassDescription() // Geometry - 0
+	std::array<vk::SubpassDescription, 3> subpasses = {
+		vk::SubpassDescription() // Depth Prepass - 0
+				.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics)
+				.setPDepthStencilAttachment(&attachmentReferences[3]),
+		vk::SubpassDescription() // Geometry - 1
 				.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics)
 				.setColorAttachments(attachmentReferences[1])
 				.setPDepthStencilAttachment(&attachmentReferences[3]),
-
-		vk::SubpassDescription() // Tonemapping - 1
+		vk::SubpassDescription() // Tonemapping - 2
 				.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics)
 				.setColorAttachments(attachmentReferences[0])
 				.setInputAttachments(attachmentReferences[2]),
 	};
 
+	vk::PipelineStageFlags srcStageMask = vk::PipelineStageFlagBits::eEarlyFragmentTests |
+										  vk::PipelineStageFlagBits::eLateFragmentTests;
+
 	std::array<vk::SubpassDependency, 2> dependencies = {
-		vk::SubpassDependency() // Geometry - 0
-				.setSrcSubpass(VK_SUBPASS_EXTERNAL)
-				.setDstSubpass(0)
-				.setSrcStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
-				.setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-				.setSrcAccessMask(vk::AccessFlagBits::eNone)
-				.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite),
-		vk::SubpassDependency() // Tonemapping - 1
+		vk::SubpassDependency() // Depth Prepass - Geometry
 				.setSrcSubpass(0)
 				.setDstSubpass(1)
+				.setSrcStageMask(srcStageMask)
+				.setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader)
+				.setSrcAccessMask(vk::AccessFlagBits::eDepthStencilAttachmentWrite)
+				.setDstAccessMask(vk::AccessFlagBits::eShaderRead),
+		vk::SubpassDependency() // Geometry - Tonemapping
+				.setSrcSubpass(1)
+				.setDstSubpass(2)
 				.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
 				.setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader)
 				.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)

@@ -133,10 +133,10 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 vk::CommandBuffer RenderingDevice::_beginSingleTimeCommands() {
 	vk::CommandBufferAllocateInfo allocInfo = vk::CommandBufferAllocateInfo()
 													  .setLevel(vk::CommandBufferLevel::ePrimary)
-													  .setCommandPool(_pContext->commandPool)
+													  .setCommandPool(_pContext->getCommandPool())
 													  .setCommandBufferCount(1);
 
-	vk::CommandBuffer commandBuffer = _pContext->device.allocateCommandBuffers(allocInfo)[0];
+	vk::CommandBuffer commandBuffer = _pContext->getDevice().allocateCommandBuffers(allocInfo)[0];
 
 	vk::CommandBufferBeginInfo beginInfo = { vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
 	commandBuffer.begin(beginInfo);
@@ -150,10 +150,10 @@ void RenderingDevice::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
 	vk::SubmitInfo submitInfo =
 			vk::SubmitInfo().setCommandBufferCount(1).setCommandBuffers(commandBuffer);
 
-	_pContext->graphicsQueue.submit(submitInfo, VK_NULL_HANDLE);
-	_pContext->graphicsQueue.waitIdle();
+	_pContext->getGraphicsQueue().submit(submitInfo, VK_NULL_HANDLE);
+	_pContext->getGraphicsQueue().waitIdle();
 
-	_pContext->device.freeCommandBuffers(_pContext->commandPool, commandBuffer);
+	_pContext->getDevice().freeCommandBuffers(_pContext->getCommandPool(), commandBuffer);
 }
 
 void RenderingDevice::_transitionImageLayout(vk::Image image, vk::Format format, uint32_t mipLevels,
@@ -204,7 +204,7 @@ void RenderingDevice::_transitionImageLayout(vk::Image image, vk::Format format,
 
 void RenderingDevice::_generateMipmaps(
 		vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels) {
-	vk::FormatProperties properties = _pContext->physicalDevice.getFormatProperties(format);
+	vk::FormatProperties properties = _pContext->getPhysicalDevice().getFormatProperties(format);
 
 	bool isBlittingSupported = (bool)(properties.optimalTilingFeatures &
 									  vk::FormatFeatureFlagBits::eSampledImageFilterLinear);
@@ -379,16 +379,16 @@ vk::ImageView RenderingDevice::imageViewCreate(
 												 .setFormat(format)
 												 .setSubresourceRange(subresourceRange);
 
-	return _pContext->device.createImageView(createInfo);
+	return _pContext->getDevice().createImageView(createInfo);
 }
 
 void RenderingDevice::imageViewDestroy(vk::ImageView imageView) {
-	_pContext->device.destroyImageView(imageView);
+	_pContext->getDevice().destroyImageView(imageView);
 }
 
 vk::Sampler RenderingDevice::samplerCreate(
 		vk::Filter filter, uint32_t mipLevels, float mipLodBias) {
-	vk::PhysicalDeviceProperties properties = _pContext->physicalDevice.getProperties();
+	vk::PhysicalDeviceProperties properties = _pContext->getPhysicalDevice().getProperties();
 	float maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
 	vk::SamplerMipmapMode mipmapMode = vk::SamplerMipmapMode::eLinear;
@@ -411,11 +411,11 @@ vk::Sampler RenderingDevice::samplerCreate(
 											   .setMaxLod(static_cast<float>(mipLevels))
 											   .setMipLodBias(mipLodBias);
 
-	return _pContext->device.createSampler(createInfo);
+	return _pContext->getDevice().createSampler(createInfo);
 }
 
 void RenderingDevice::samplerDestroy(vk::Sampler sampler) {
-	_pContext->device.destroySampler(sampler);
+	_pContext->getDevice().destroySampler(sampler);
 }
 
 TextureRD RenderingDevice::textureCreate(Image *pImage) {
@@ -488,11 +488,11 @@ void RenderingDevice::updateLightBuffer(uint8_t *pData, size_t size) {
 }
 
 vk::Instance RenderingDevice::getInstance() const {
-	return _pContext->instance;
+	return _pContext->getInstance();
 }
 
 vk::Device RenderingDevice::getDevice() const {
-	return _pContext->device;
+	return _pContext->getDevice();
 }
 
 vk::PipelineLayout RenderingDevice::getDepthPipelineLayout() const {
@@ -526,25 +526,26 @@ vk::DescriptorSetLayout RenderingDevice::getTextureLayout() const {
 vk::CommandBuffer RenderingDevice::drawBegin() {
 	vk::CommandBuffer commandBuffer = _commandBuffers[_frame];
 
-	vk::Result result = _pContext->device.waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
+	vk::Result result = _pContext->getDevice().waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
 
 	if (result != vk::Result::eSuccess) {
 		printf("Device failed to wait for fences!\n");
 	}
 
-	vk::ResultValue<uint32_t> image = _pContext->device.acquireNextImageKHR(
-			_pContext->swapchain, UINT64_MAX, _presentSemaphores[_frame], VK_NULL_HANDLE);
+	vk::ResultValue<uint32_t> image = _pContext->getDevice().acquireNextImageKHR(
+			_pContext->getSwapchain(), UINT64_MAX, _presentSemaphores[_frame], VK_NULL_HANDLE);
 
 	_imageIndex = image.value;
 
 	if (image.result == vk::Result::eErrorOutOfDateKHR) {
 		_pContext->recreateSwapchain(_width, _height);
-		updateInputAttachment(_pContext->device, _pContext->colorView, _inputAttachmentSet);
+		updateInputAttachment(_pContext->getDevice(),
+				_pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
 	} else if (image.result != vk::Result::eSuccess && image.result != vk::Result::eSuboptimalKHR) {
 		printf("Failed to acquire swapchain image!");
 	}
 
-	_pContext->device.resetFences(_fences[_frame]);
+	_pContext->getDevice().resetFences(_fences[_frame]);
 
 	commandBuffer.reset();
 
@@ -557,7 +558,7 @@ vk::CommandBuffer RenderingDevice::drawBegin() {
 	clearValues[1].color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
 	clearValues[2].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
-	vk::Extent2D extent = _pContext->swapchainExtent;
+	vk::Extent2D extent = _pContext->getSwapchainExtent();
 
 	vk::Viewport viewport = vk::Viewport()
 									.setX(0.0f)
@@ -571,8 +572,8 @@ vk::CommandBuffer RenderingDevice::drawBegin() {
 
 	vk::RenderPassBeginInfo renderPassInfo =
 			vk::RenderPassBeginInfo()
-					.setRenderPass(_pContext->renderPass)
-					.setFramebuffer(_pContext->swapchainImages[_imageIndex.value()].framebuffer)
+					.setRenderPass(_pContext->getRenderPass())
+					.setFramebuffer(_pContext->getFramebuffer(_imageIndex.value()))
 					.setRenderArea(vk::Rect2D{ { 0, 0 }, extent })
 					.setClearValues(clearValues);
 
@@ -613,18 +614,21 @@ void RenderingDevice::drawEnd(vk::CommandBuffer commandBuffer) {
 										.setCommandBuffers(commandBuffer)
 										.setSignalSemaphores(_renderSemaphores[_frame]);
 
-	_pContext->graphicsQueue.submit(submitInfo, _fences[_frame]);
+	_pContext->getGraphicsQueue().submit(submitInfo, _fences[_frame]);
+
+	vk::SwapchainKHR swapchain = _pContext->getSwapchain();
 
 	vk::PresentInfoKHR presentInfo = vk::PresentInfoKHR()
 											 .setWaitSemaphores(_renderSemaphores[_frame])
-											 .setSwapchains(_pContext->swapchain)
+											 .setSwapchains(swapchain)
 											 .setImageIndices(_imageIndex.value());
 
-	vk::Result err = _pContext->presentQueue.presentKHR(presentInfo);
+	vk::Result err = _pContext->getPresentQueue().presentKHR(presentInfo);
 
 	if (err == vk::Result::eErrorOutOfDateKHR || err == vk::Result::eSuboptimalKHR || _resized) {
 		_pContext->recreateSwapchain(_width, _height);
-		updateInputAttachment(_pContext->device, _pContext->colorView, _inputAttachmentSet);
+		updateInputAttachment(_pContext->getDevice(),
+				_pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
 
 		_resized = false;
 	} else if (err != vk::Result::eSuccess) {
@@ -642,9 +646,9 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 	VmaAllocatorCreateInfo allocatorCreateInfo = {};
 	allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_1;
-	allocatorCreateInfo.instance = _pContext->instance;
-	allocatorCreateInfo.physicalDevice = _pContext->physicalDevice;
-	allocatorCreateInfo.device = _pContext->device;
+	allocatorCreateInfo.instance = _pContext->getInstance();
+	allocatorCreateInfo.physicalDevice = _pContext->getPhysicalDevice();
+	allocatorCreateInfo.device = _pContext->getDevice();
 
 	{
 		VkResult err = vmaCreateAllocator(&allocatorCreateInfo, &_allocator);
@@ -655,9 +659,9 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 	// commands
 
-	vk::Device device = _pContext->device;
+	vk::Device device = _pContext->getDevice();
 
-	vk::CommandBufferAllocateInfo allocInfo = { _pContext->commandPool,
+	vk::CommandBufferAllocateInfo allocInfo = { _pContext->getCommandPool(),
 		vk::CommandBufferLevel::ePrimary, static_cast<uint32_t>(FRAMES_IN_FLIGHT) };
 
 	for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
@@ -785,7 +789,8 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 			printf("Failed to allocate input attachment set!\n");
 		}
 
-		updateInputAttachment(device, _pContext->colorView, _inputAttachmentSet);
+		updateInputAttachment(
+				device, _pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
 	}
 
 	// light
@@ -895,7 +900,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 		_depthLayout = device.createPipelineLayout(createInfo);
 		_depthPipeline = createPipeline(device, vertexStage, fragmentStage, _depthLayout,
-				_pContext->renderPass, 0, vertexInput, true);
+				_pContext->getRenderPass(), 0, vertexInput, true);
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);
@@ -924,7 +929,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 		_materialLayout = device.createPipelineLayout(createInfo);
 		_materialPipeline = createPipeline(device, vertexStage, fragmentStage, _materialLayout,
-				_pContext->renderPass, 1, vertexInput);
+				_pContext->getRenderPass(), 1, vertexInput);
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);
@@ -945,8 +950,8 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 				vk::PipelineLayoutCreateInfo().setSetLayouts(_inputAttachmentLayout);
 
 		_tonemapLayout = device.createPipelineLayout(createInfo);
-		_tonemapPipeline = createPipeline(
-				device, vertexStage, fragmentStage, _tonemapLayout, _pContext->renderPass, 2, {});
+		_tonemapPipeline = createPipeline(device, vertexStage, fragmentStage, _tonemapLayout,
+				_pContext->getRenderPass(), 2, {});
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);

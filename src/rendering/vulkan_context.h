@@ -7,70 +7,85 @@
 #include <vulkan/vulkan.hpp>
 
 const std::vector<const char *> VALIDATION_LAYERS = { "VK_LAYER_KHRONOS_validation" };
-
 const std::vector<const char *> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-struct QueueFamilyIndices {
-	uint32_t graphicsFamily = UINT32_MAX;
-	uint32_t presentFamily = UINT32_MAX;
+const uint32_t DEPTH_PASS = 0;
+const uint32_t MAIN_PASS = 1;
+const uint32_t TONEMAP_PASS = 2;
 
-	bool isComplete() {
-		return graphicsFamily != UINT32_MAX && presentFamily != UINT32_MAX;
-	}
-};
+class FramebufferAttachment {
+private:
+	vk::Image _image = {};
+	vk::DeviceMemory _imageMemory = {};
+	vk::ImageView _imageView = {};
 
-struct SwapchainSupportDetails {
-	vk::SurfaceCapabilitiesKHR capabilities;
-	std::vector<vk::SurfaceFormatKHR> surfaceFormats;
-	std::vector<vk::PresentModeKHR> presentModes;
+public:
+	vk::ImageView getImageView() const;
+
+	void create(vk::Device device, uint32_t width, uint32_t height, vk::Format format,
+			vk::ImageUsageFlags usage, vk::ImageAspectFlagBits aspectFlags,
+			vk::PhysicalDeviceMemoryProperties memProperties);
+	void destroy(vk::Device device);
 };
 
 class VulkanContext {
 private:
-	void _createSwapchain(uint32_t width, uint32_t height);
-	void _destroySwapchain();
+	bool _validation = false;
 
-public:
-	bool validationEnabled = false;
+	vk::Instance _instance;
+	VkDebugUtilsMessengerEXT _debugMessenger;
 
-	vk::Instance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
+	vk::SurfaceKHR _surface;
+	vk::PhysicalDevice _physicalDevice;
+	vk::Device _device;
 
-	vk::SurfaceKHR surface;
-	vk::PhysicalDevice physicalDevice;
-	vk::Device device;
-
-	vk::Queue graphicsQueue;
-	vk::Queue presentQueue;
-
-	uint32_t graphicsQueueFamily;
+	vk::Queue _graphicsQueue;
+	vk::Queue _presentQueue;
 
 	typedef struct {
 		vk::ImageView view;
 		vk::Framebuffer framebuffer;
 	} SwapchainImageResource;
 
-	std::vector<SwapchainImageResource> swapchainImages;
-	vk::SwapchainKHR swapchain;
-	vk::Extent2D swapchainExtent;
-	vk::RenderPass renderPass;
+	std::vector<SwapchainImageResource> _swapchainImages;
+	vk::SwapchainKHR _swapchain;
+	vk::Extent2D _swapchainExtent;
+	vk::RenderPass _renderPass;
 
-	vk::Image colorImage;
-	vk::ImageView colorView;
-	vk::DeviceMemory colorMemory;
+	FramebufferAttachment _color;
+	FramebufferAttachment _depth;
 
-	vk::Image depthImage;
-	vk::ImageView depthView;
-	vk::DeviceMemory depthMemory;
+	vk::CommandPool _commandPool;
 
-	vk::CommandPool commandPool;
+	bool _initialized = false;
 
-	bool initialized = false;
+	void _createSwapchain(uint32_t width, uint32_t height);
+	void _destroySwapchain();
 
-	void recreateSwapchain(uint32_t width, uint32_t height);
+public:
 	void initialize(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void recreateSwapchain(uint32_t width, uint32_t height);
 
-	VulkanContext(std::vector<const char *> extensions, bool useValidation);
+	vk::Instance getInstance() const;
+
+	vk::SurfaceKHR getSurface() const;
+	vk::PhysicalDevice getPhysicalDevice() const;
+	vk::Device getDevice() const;
+
+	vk::Queue getGraphicsQueue() const;
+	vk::Queue getPresentQueue() const;
+
+	vk::SwapchainKHR getSwapchain() const;
+	vk::Extent2D getSwapchainExtent() const;
+
+	vk::RenderPass getRenderPass() const;
+	vk::Framebuffer getFramebuffer(uint32_t imageIndex) const;
+
+	FramebufferAttachment getColorAttachment() const;
+
+	vk::CommandPool getCommandPool() const;
+
+	VulkanContext(std::vector<const char *> extensions, bool validation = false);
 	~VulkanContext();
 };
 

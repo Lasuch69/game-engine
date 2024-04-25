@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 
+#include "storage/light_storage.h"
 #include "types/allocated.h"
 
 #include "../image.h"
@@ -13,7 +14,6 @@
 #include "vulkan_context.h"
 
 const int FRAMES_IN_FLIGHT = 2;
-const int MAX_LIGHT_COUNT = 8;
 
 struct UniformBufferObject {
 	glm::vec3 viewPosition;
@@ -25,13 +25,6 @@ struct MeshPushConstants {
 	glm::mat4 model;
 };
 
-struct PointLightRD {
-	glm::vec3 position;
-	float range;
-	glm::vec3 color;
-	float intensity;
-};
-
 struct TextureRD {
 	AllocatedImage image;
 	vk::ImageView imageView;
@@ -41,6 +34,9 @@ struct TextureRD {
 class RenderingDevice {
 private:
 	VulkanContext *_pContext;
+
+	LightStorage _lightStorage;
+
 	uint32_t _frame = 0;
 
 	uint32_t _width, _height;
@@ -57,16 +53,13 @@ private:
 
 	vk::DescriptorSetLayout _uniformLayout;
 	vk::DescriptorSetLayout _inputAttachmentLayout;
-	vk::DescriptorSetLayout _lightLayout;
 	vk::DescriptorSetLayout _textureLayout;
 
 	vk::DescriptorSet _uniformSets[FRAMES_IN_FLIGHT];
 	vk::DescriptorSet _inputAttachmentSet;
-	vk::DescriptorSet _lightSet;
 
 	AllocatedBuffer _uniformBuffers[FRAMES_IN_FLIGHT];
 	VmaAllocationInfo _uniformAllocInfos[FRAMES_IN_FLIGHT];
-	AllocatedBuffer _lightBuffer;
 
 	vk::PipelineLayout _depthLayout;
 	vk::Pipeline _depthPipeline;
@@ -111,7 +104,8 @@ public:
 	TextureRD textureCreate(Image *pImage);
 
 	void updateUniformBuffer(const glm::vec3 &viewPosition, uint32_t lightCount);
-	void updateLightBuffer(uint8_t *pData, size_t size);
+
+	LightStorage &getLightStorage();
 
 	vk::Instance getInstance() const;
 	vk::Device getDevice() const;

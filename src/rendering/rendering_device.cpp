@@ -483,8 +483,8 @@ void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition, uint32_
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }
 
-void RenderingDevice::updateLightBuffer(uint8_t *pData, size_t size) {
-	bufferSend(_lightBuffer.buffer, pData, size);
+LightStorage &RenderingDevice::getLightStorage() {
+	return _lightStorage;
 }
 
 vk::Instance RenderingDevice::getInstance() const {
@@ -512,7 +512,7 @@ vk::Pipeline RenderingDevice::getMaterialPipeline() const {
 }
 
 std::array<vk::DescriptorSet, 2> RenderingDevice::getMaterialSets() const {
-	return { _uniformSets[_frame], _lightSet };
+	return { _uniformSets[_frame], _lightStorage.getLightSet() };
 }
 
 vk::DescriptorPool RenderingDevice::getDescriptorPool() const {
@@ -546,6 +546,8 @@ vk::CommandBuffer RenderingDevice::drawBegin() {
 	}
 
 	_pContext->getDevice().resetFences(_fences[_frame]);
+
+	_lightStorage.update();
 
 	commandBuffer.reset();
 
@@ -701,6 +703,10 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 	_descriptorPool = device.createDescriptorPool(createInfo);
 
+	// light
+
+	_lightStorage.initialize(_pContext->getDevice(), _allocator, _descriptorPool);
+
 	// uniform
 
 	{
@@ -793,54 +799,6 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 				device, _pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
 	}
 
-	// light
-
-	{
-		vk::DescriptorSetLayoutBinding binding =
-				vk::DescriptorSetLayoutBinding()
-						.setBinding(0)
-						.setDescriptorType(vk::DescriptorType::eStorageBuffer)
-						.setDescriptorCount(1)
-						.setStageFlags(vk::ShaderStageFlagBits::eFragment);
-
-		vk::DescriptorSetLayoutCreateInfo createInfo =
-				vk::DescriptorSetLayoutCreateInfo().setBindings(binding);
-
-		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_lightLayout);
-
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to create light layout!\n");
-		}
-
-		vk::DescriptorSetAllocateInfo allocInfo = vk::DescriptorSetAllocateInfo()
-														  .setDescriptorPool(_descriptorPool)
-														  .setDescriptorSetCount(1)
-														  .setSetLayouts(_lightLayout);
-
-		err = device.allocateDescriptorSets(&allocInfo, &_lightSet);
-
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to allocate light set!\n");
-		}
-
-		_lightBuffer = bufferCreate(
-				vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst,
-				sizeof(PointLightRD) * MAX_LIGHT_COUNT);
-
-		vk::DescriptorBufferInfo bufferInfo = _lightBuffer.getBufferInfo();
-
-		vk::WriteDescriptorSet writeInfo =
-				vk::WriteDescriptorSet()
-						.setDstSet(_lightSet)
-						.setDstBinding(0)
-						.setDstArrayElement(0)
-						.setDescriptorType(vk::DescriptorType::eStorageBuffer)
-						.setDescriptorCount(1)
-						.setBufferInfo(bufferInfo);
-
-		device.updateDescriptorSets(writeInfo, nullptr);
-	}
-
 	// textures
 
 	{
@@ -919,7 +877,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 
 		std::array<vk::DescriptorSetLayout, 3> layouts = {
 			_uniformLayout,
-			_lightLayout,
+			_lightStorage.getLightSetLayout(),
 			_textureLayout,
 		};
 

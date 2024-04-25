@@ -13,24 +13,6 @@
 		return;                                                                                    \
 	}
 
-void RenderingServer::_updateLights() {
-	if (_pointLights.size() == 0) {
-		PointLightRD lightData{};
-		_pDevice->updateLightBuffer((uint8_t *)&lightData, sizeof(PointLightRD));
-		return;
-	}
-
-	std::vector<PointLightRD> lights;
-	for (const auto &[id, light] : _pointLights.map()) {
-		if (lights.size() >= 8)
-			break;
-
-		lights.push_back(light);
-	}
-
-	_pDevice->updateLightBuffer((uint8_t *)lights.data(), sizeof(PointLightRD) * lights.size());
-}
-
 void RS::cameraSetTransform(const glm::mat4 &transform) {
 	_camera.transform = transform;
 }
@@ -148,47 +130,27 @@ void RS::meshInstanceFree(MeshInstance meshInstance) {
 }
 
 PointLight RenderingServer::pointLightCreate() {
-	PointLight pointLight = _pointLights.insert({});
-	_updateLights();
-
-	return pointLight;
+	return _pDevice->getLightStorage().pointLightCreate();
 }
 
 void RS::pointLightSetPosition(PointLight pointLight, const glm::vec3 &position) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-
-	_pointLights[pointLight].position = position;
-	_updateLights();
+	_pDevice->getLightStorage().pointLightSetPosition(pointLight, position);
 }
 
 void RS::pointLightSetRange(PointLight pointLight, float range) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-
-	_pointLights[pointLight].range = range;
-	_updateLights();
+	_pDevice->getLightStorage().pointLightSetRange(pointLight, range);
 }
 
 void RS::pointLightSetColor(PointLight pointLight, const glm::vec3 &color) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-
-	_pointLights[pointLight].color = color;
-	_updateLights();
+	_pDevice->getLightStorage().pointLightSetColor(pointLight, color);
 }
 
 void RS::pointLightSetIntensity(PointLight pointLight, float intensity) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-
-	_pointLights[pointLight].intensity = intensity;
-	_updateLights();
+	_pDevice->getLightStorage().pointLightSetIntensity(pointLight, intensity);
 }
 
 void RS::pointLightFree(PointLight pointLight) {
-	std::optional<PointLightRD> result = _pointLights.remove(pointLight);
-
-	if (!result.has_value())
-		return;
-
-	_updateLights();
+	_pDevice->getLightStorage().pointLightFree(pointLight);
 }
 
 Texture RS::textureCreate(Image *pImage) {
@@ -286,7 +248,8 @@ void RS::materialFree(Material material) {
 }
 
 void RenderingServer::draw() {
-	_pDevice->updateUniformBuffer(_camera.transform[3], _pointLights.size());
+	_pDevice->updateUniformBuffer(
+			_camera.transform[3], _pDevice->getLightStorage().getLightCount());
 
 	float aspect = static_cast<float>(_width) / static_cast<float>(_height);
 	glm::mat4 projView = _camera.projectionMatrix(aspect) * _camera.viewMatrix();

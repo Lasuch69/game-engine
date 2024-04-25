@@ -18,7 +18,6 @@
 
 typedef uint64_t Mesh;
 typedef uint64_t MeshInstance;
-typedef uint64_t PointLight;
 typedef uint64_t Texture;
 typedef uint64_t Material;
 
@@ -63,11 +62,8 @@ private:
 	Camera _camera;
 	RIDOwner<MeshRD> _meshes;
 	RIDOwner<MeshInstanceRD> _meshInstances;
-	RIDOwner<PointLightRD> _pointLights;
 	RIDOwner<TextureRD> _textures;
 	RIDOwner<MaterialRD> _materials;
-
-	void _updateLights();
 
 public:
 	void cameraSetTransform(const glm::mat4 &transform);

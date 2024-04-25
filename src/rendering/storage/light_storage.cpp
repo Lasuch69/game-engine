@@ -11,6 +11,32 @@
 		return;                                                                                    \
 	}
 
+DirectionalLight LightStorage::directionalLightCreate() {
+	return _directionalLights.insert({});
+}
+
+void LightStorage::directionalLightSetDirection(
+		DirectionalLight directionalLight, const glm::vec3 &direction) {
+	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
+	_directionalLights[directionalLight].direction = direction;
+}
+
+void LightStorage::directionalLightSetColor(
+		DirectionalLight directionalLight, const glm::vec3 &color) {
+	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
+	_directionalLights[directionalLight].color = color;
+}
+
+void LightStorage::directionalLightSetIntensity(
+		DirectionalLight directionalLight, float intensity) {
+	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
+	_directionalLights[directionalLight].intensity = intensity;
+}
+
+void LightStorage::directionalLightFree(DirectionalLight directionalLight) {
+	_directionalLights.remove(directionalLight);
+}
+
 PointLight LightStorage::pointLightCreate() {
 	return _pointLights.insert({});
 }
@@ -39,7 +65,11 @@ void LightStorage::pointLightFree(PointLight pointLight) {
 	_pointLights.remove(pointLight);
 }
 
-uint32_t LightStorage::getLightCount() const {
+uint32_t LightStorage::getDirectionalLightCount() const {
+	return _directionalLights.size();
+}
+
+uint32_t LightStorage::getPointLightCount() const {
 	return _pointLights.size();
 }
 
@@ -56,14 +86,19 @@ void LightStorage::initialize(
 	if (_initialized)
 		return;
 
-	vk::DescriptorSetLayoutBinding binding = {};
-	binding.setBinding(0);
-	binding.setDescriptorType(vk::DescriptorType::eStorageBuffer);
-	binding.setDescriptorCount(1);
-	binding.setStageFlags(vk::ShaderStageFlagBits::eFragment);
+	std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {};
+	bindings[0].setBinding(0);
+	bindings[0].setDescriptorType(vk::DescriptorType::eStorageBuffer);
+	bindings[0].setDescriptorCount(1);
+	bindings[0].setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
+	bindings[1].setBinding(1);
+	bindings[1].setDescriptorType(vk::DescriptorType::eStorageBuffer);
+	bindings[1].setDescriptorCount(1);
+	bindings[1].setStageFlags(vk::ShaderStageFlagBits::eFragment);
 
 	vk::DescriptorSetLayoutCreateInfo createInfo = {};
-	createInfo.setBindings(binding);
+	createInfo.setBindings(bindings);
 
 	vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_lightSetLayout);
 
@@ -83,31 +118,63 @@ void LightStorage::initialize(
 	vk::BufferUsageFlags usage =
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst;
 
-	vk::DeviceSize size = sizeof(PointLightRD) * MAX_LIGHT_COUNT;
-	_pointlightBuffer = AllocatedBuffer::create(allocator, usage, size, &_pointlightAllocInfo);
+	_directionalLightBuffer = AllocatedBuffer::create(allocator, usage,
+			sizeof(DirectionalLightRD) * MAX_DIRECTIONAL_LIGHT_COUNT, &_directionalLightAllocInfo);
 
-	vk::DescriptorBufferInfo bufferInfo = _pointlightBuffer.getBufferInfo();
+	_pointLightBuffer = AllocatedBuffer::create(
+			allocator, usage, sizeof(PointLightRD) * MAX_POINT_LIGHT_COUNT, &_pointLightAllocInfo);
 
-	vk::WriteDescriptorSet writeInfo = {};
-	writeInfo.setDstSet(_lightSet);
-	writeInfo.setDstBinding(0);
-	writeInfo.setDstArrayElement(0);
-	writeInfo.setDescriptorType(vk::DescriptorType::eStorageBuffer);
-	writeInfo.setDescriptorCount(1);
-	writeInfo.setBufferInfo(bufferInfo);
+	vk::DescriptorBufferInfo directionalLightBufferInfo = _directionalLightBuffer.getBufferInfo();
+	vk::DescriptorBufferInfo pointLightBufferInfo = _pointLightBuffer.getBufferInfo();
 
-	device.updateDescriptorSets(writeInfo, nullptr);
+	std::array<vk::WriteDescriptorSet, 2> writeInfos = {};
+	writeInfos[0].setDstSet(_lightSet);
+	writeInfos[0].setDstBinding(0);
+	writeInfos[0].setDstArrayElement(0);
+	writeInfos[0].setDescriptorType(vk::DescriptorType::eStorageBuffer);
+	writeInfos[0].setDescriptorCount(1);
+	writeInfos[0].setBufferInfo(directionalLightBufferInfo);
+
+	writeInfos[1].setDstSet(_lightSet);
+	writeInfos[1].setDstBinding(1);
+	writeInfos[1].setDstArrayElement(0);
+	writeInfos[1].setDescriptorType(vk::DescriptorType::eStorageBuffer);
+	writeInfos[1].setDescriptorCount(1);
+	writeInfos[1].setBufferInfo(pointLightBufferInfo);
+
+	device.updateDescriptorSets(writeInfos, nullptr);
 }
 
 void LightStorage::update() {
-	std::vector<PointLightRD> pointLights(MAX_LIGHT_COUNT);
+	{
+		std::vector<DirectionalLightRD> directionalLights(MAX_DIRECTIONAL_LIGHT_COUNT);
 
-	uint32_t index = 0;
-	for (const auto [_, pointLight] : _pointLights.map()) {
-		pointLights[index] = pointLight;
-		index++;
+		uint32_t index = 0;
+		for (const auto [_, directionalLight] : _directionalLights.map()) {
+			if (index >= MAX_DIRECTIONAL_LIGHT_COUNT)
+				break;
+
+			directionalLights[index] = directionalLight;
+			index++;
+		}
+
+		memcpy(_directionalLightAllocInfo.pMappedData, directionalLights.data(),
+				sizeof(DirectionalLightRD) * MAX_DIRECTIONAL_LIGHT_COUNT);
 	}
 
-	memcpy(_pointlightAllocInfo.pMappedData, pointLights.data(),
-			sizeof(PointLightRD) * MAX_LIGHT_COUNT);
+	{
+		std::vector<PointLightRD> pointLights(MAX_POINT_LIGHT_COUNT);
+
+		uint32_t index = 0;
+		for (const auto [_, pointLight] : _pointLights.map()) {
+			if (index >= MAX_POINT_LIGHT_COUNT)
+				break;
+
+			pointLights[index] = pointLight;
+			index++;
+		}
+
+		memcpy(_pointLightAllocInfo.pMappedData, pointLights.data(),
+				sizeof(PointLightRD) * MAX_POINT_LIGHT_COUNT);
+	}
 }

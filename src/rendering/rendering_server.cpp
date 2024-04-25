@@ -1,8 +1,8 @@
 #include <cstdint>
 #include <iostream>
+#include <optional>
 
 #include <glm/glm.hpp>
-#include <optional>
 
 #include "rendering_device.h"
 #include "rendering_server.h"
@@ -129,6 +129,27 @@ void RS::meshInstanceFree(MeshInstance meshInstance) {
 	_meshInstances.remove(meshInstance);
 }
 
+DirectionalLight RS::directionalLightCreate() {
+	return _pDevice->getLightStorage().directionalLightCreate();
+}
+
+void RS::directionalLightSetDirection(
+		DirectionalLight directionalLight, const glm::vec3 &direction) {
+	_pDevice->getLightStorage().directionalLightSetDirection(directionalLight, direction);
+}
+
+void RS::directionalLightSetIntensity(DirectionalLight directionalLight, float intensity) {
+	_pDevice->getLightStorage().directionalLightSetIntensity(directionalLight, intensity);
+}
+
+void RS::directionalLightSetColor(DirectionalLight directionalLight, const glm::vec3 &color) {
+	_pDevice->getLightStorage().directionalLightSetColor(directionalLight, color);
+}
+
+void RS::directionalLightFree(DirectionalLight directionalLight) {
+	_pDevice->getLightStorage().directionalLightFree(directionalLight);
+}
+
 PointLight RenderingServer::pointLightCreate() {
 	return _pDevice->getLightStorage().pointLightCreate();
 }
@@ -248,8 +269,7 @@ void RS::materialFree(Material material) {
 }
 
 void RenderingServer::draw() {
-	_pDevice->updateUniformBuffer(
-			_camera.transform[3], _pDevice->getLightStorage().getLightCount());
+	_pDevice->updateUniformBuffer(_camera.transform[3]);
 
 	float aspect = static_cast<float>(_width) / static_cast<float>(_height);
 	glm::mat4 projView = _camera.projectionMatrix(aspect) * _camera.viewMatrix();

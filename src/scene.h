@@ -14,6 +14,7 @@ private:
 	std::vector<Mesh> _meshes;
 	std::vector<MeshInstance> _meshInstances;
 
+	std::vector<DirectionalLight> _directionalLights;
 	std::vector<PointLight> _pointLights;
 
 public:

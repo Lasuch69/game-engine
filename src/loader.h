@@ -13,6 +13,7 @@
 namespace Loader {
 
 enum class LightType {
+	Directional,
 	Point,
 };
 

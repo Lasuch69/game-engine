@@ -17,7 +17,8 @@ const int FRAMES_IN_FLIGHT = 2;
 
 struct UniformBufferObject {
 	glm::vec3 viewPosition;
-	uint32_t lightCount;
+	uint32_t directionalLightCount;
+	uint32_t pointLightCount;
 };
 
 struct MeshPushConstants {
@@ -103,7 +104,7 @@ public:
 
 	TextureRD textureCreate(Image *pImage);
 
-	void updateUniformBuffer(const glm::vec3 &viewPosition, uint32_t lightCount);
+	void updateUniformBuffer(const glm::vec3 &viewPosition);
 
 	LightStorage &getLightStorage();
 

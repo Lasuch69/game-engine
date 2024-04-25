@@ -79,6 +79,13 @@ public:
 	void meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform);
 	void meshInstanceFree(MeshInstance meshInstance);
 
+	DirectionalLight directionalLightCreate();
+	void directionalLightSetDirection(
+			DirectionalLight directionalLight, const glm::vec3 &direction);
+	void directionalLightSetIntensity(DirectionalLight directionalLight, float intensity);
+	void directionalLightSetColor(DirectionalLight directionalLight, const glm::vec3 &color);
+	void directionalLightFree(DirectionalLight directionalLight);
+
 	PointLight pointLightCreate();
 	void pointLightSetPosition(PointLight pointLight, const glm::vec3 &position);
 	void pointLightSetRange(PointLight pointLight, float range);

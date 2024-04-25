@@ -1,19 +1,32 @@
 #version 450
 
-struct LightData {
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+	vec3 viewPosition;
+
+	int directionalLightCount;
+	int pointLightCount;
+};
+
+struct DirectionalLight {
+	vec3 direction;
+	float intensity;
+	vec3 color;
+	float _padding;
+};
+
+layout(set = 1, binding = 0) readonly buffer DirectionalLightBuffer {
+	DirectionalLight directionalLights[];
+};
+
+struct PointLight {
 	vec3 position;
 	float range;
 	vec3 color;
 	float intensity;
 };
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-	vec3 viewPosition;
-	int lightCount;
-};
-
-layout(set = 1, binding = 0) readonly buffer LightDataBuffer {
-	LightData lights[];
+layout(set = 1, binding = 1) readonly buffer PointLightBuffer {
+	PointLight pointLights[];
 };
 
 layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
@@ -105,17 +118,42 @@ void main() {
 	F0 = mix(F0, albedo, metallic);
 
 	vec3 Lo = vec3(0.0);
-	for (int i = 0; i < lightCount; i++) {
-		vec3 lightPosition = lights[i].position;
-		vec3 lightColor = lights[i].color;
-		float intensity = lights[i].intensity;
 
-		lightColor *= intensity;
+	// directional lights
+	for (int i = 0; i < directionalLightCount; i++) {
+		vec3 lightDir = directionalLights[i].direction;
+		vec3 lightColor = directionalLights[i].color * directionalLights[i].intensity;
+
+		vec3 L = normalize(-lightDir);
+		vec3 H = normalize(V + L);
+
+		// cook-torrance brdf
+		float NDF = distributionGGX(N, H, roughness);
+		float G = geometrySmith(N, V, L, roughness);
+		vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+		vec3 kS = F;
+		vec3 kD = vec3(1.0) - kS;
+		kD *= 1.0 - metallic;
+
+		vec3 numerator = NDF * G * F;
+		float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+		vec3 specular = numerator / denominator;
+
+		// add to outgoing radiance Lo
+		float NdotL = max(dot(N, L), 0.0);
+		Lo += (kD * albedo / PI + specular) * NdotL;
+	}
+
+	// point lights
+	for (int i = 0; i < pointLightCount; i++) {
+		vec3 lightPos = pointLights[i].position;
+		vec3 lightColor = pointLights[i].color * pointLights[i].intensity;
 
 		// calculate per-light radiance
-		vec3 L = normalize(lightPosition - inPosition);
+		vec3 L = normalize(lightPos - inPosition);
 		vec3 H = normalize(V + L);
-		float distance = length(lightPosition - inPosition);
+		float distance = length(lightPos - inPosition);
 		float attenuation = 1.0 / (distance * distance);
 		vec3 radiance = lightColor * attenuation;
 

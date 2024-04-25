@@ -475,10 +475,11 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 	};
 }
 
-void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition, uint32_t lightCount) {
+void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition) {
 	UniformBufferObject ubo{};
 	ubo.viewPosition = viewPosition;
-	ubo.lightCount = lightCount;
+	ubo.directionalLightCount = _lightStorage.getDirectionalLightCount();
+	ubo.pointLightCount = _lightStorage.getPointLightCount();
 
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }

@@ -294,27 +294,31 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Light gltfLight = pAsset->lights[lightIndex.value()];
 
 			LightType lightType = LightType::Point;
+			glm::vec3 color = glm::make_vec3(gltfLight.color.data());
+			float intensity = gltfLight.intensity;
+
 			std::optional<float> range = {};
 
-			switch (gltfLight.type) {
-				case fastgltf::LightType::Point:
-					lightType = LightType::Point;
+			if (gltfLight.type == fastgltf::LightType::Point) {
+				if (gltfLight.range.has_value())
+					range = gltfLight.range.value();
 
-					if (gltfLight.range.has_value())
-						range = gltfLight.range.value();
-
-					break;
-				default:
-					continue;
+				intensity *= STERADIAN / 1000.0f;
+				lightType = LightType::Point;
+			} else if (gltfLight.type == fastgltf::LightType::Directional) {
+				lightType = LightType::Directional;
+			} else {
+				continue;
 			}
 
-			Light light = {};
-			light.transform = transform;
-			light.type = lightType;
-			light.color = glm::make_vec3(gltfLight.color.data());
-			light.intensity = (gltfLight.intensity * STERADIAN) / 1000.0f;
-			light.range = range;
-			light.name = name;
+			Light light = {
+				transform,
+				lightType,
+				color,
+				intensity,
+				range,
+				name,
+			};
 
 			lights.push_back(light);
 		}

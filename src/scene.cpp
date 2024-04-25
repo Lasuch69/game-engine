@@ -91,21 +91,40 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 	}
 
 	for (const Loader::Light &sceneLight : scene.lights) {
-		if (sceneLight.type != Loader::LightType::Point)
+		if (sceneLight.type == Loader::LightType::Point) {
+			glm::vec3 position = glm::vec3(sceneLight.transform[3]);
+			float range = sceneLight.range.value_or(0.0f);
+			glm::vec3 color = sceneLight.color;
+			float intensity = sceneLight.intensity;
+
+			PointLight pointLight = pRenderingServer->pointLightCreate();
+			pRenderingServer->pointLightSetPosition(pointLight, position);
+			pRenderingServer->pointLightSetRange(pointLight, range);
+			pRenderingServer->pointLightSetColor(pointLight, color);
+			pRenderingServer->pointLightSetIntensity(pointLight, intensity);
+
+			_pointLights.push_back(pointLight);
+
 			continue;
+		}
 
-		glm::vec3 position = glm::vec3(sceneLight.transform[3]);
-		float range = sceneLight.range.value_or(0.0f);
-		glm::vec3 color = sceneLight.color;
-		float intensity = sceneLight.intensity;
+		if (sceneLight.type == Loader::LightType::Directional) {
+			glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
+			glm::mat3 rotation = glm::mat3(sceneLight.transform);
 
-		PointLight pointLight = pRenderingServer->pointLightCreate();
-		pRenderingServer->pointLightSetPosition(pointLight, position);
-		pRenderingServer->pointLightSetRange(pointLight, range);
-		pRenderingServer->pointLightSetColor(pointLight, color);
-		pRenderingServer->pointLightSetIntensity(pointLight, intensity);
+			glm::vec3 direction = rotation * front;
+			glm::vec3 color = sceneLight.color;
+			float intensity = sceneLight.intensity;
 
-		_pointLights.push_back(pointLight);
+			DirectionalLight directionalLight = pRenderingServer->directionalLightCreate();
+			pRenderingServer->directionalLightSetDirection(directionalLight, direction);
+			pRenderingServer->directionalLightSetIntensity(directionalLight, intensity);
+			pRenderingServer->directionalLightSetColor(directionalLight, color);
+
+			_directionalLights.push_back(directionalLight);
+
+			continue;
+		}
 	}
 
 	for (Image *pImage : scene.images) {
@@ -118,6 +137,9 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 void Scene::clear(RenderingServer *pRenderingServer) {
 	for (MeshInstance meshInstance : _meshInstances)
 		pRenderingServer->meshInstanceFree(meshInstance);
+
+	for (DirectionalLight directionalLight : _directionalLights)
+		pRenderingServer->directionalLightFree(directionalLight);
 
 	for (PointLight pointLight : _pointLights)
 		pRenderingServer->pointLightFree(pointLight);

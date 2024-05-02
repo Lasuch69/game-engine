@@ -18,8 +18,8 @@ private:
 	std::vector<PointLight> _pointLights;
 
 public:
-	bool load(const std::filesystem::path &path, RenderingServer *pRenderingServer);
-	void clear(RenderingServer *pRenderingServer);
+	bool load(const std::filesystem::path &path);
+	void clear();
 };
 
 #endif // !SCENE_H

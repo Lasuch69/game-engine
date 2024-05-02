@@ -1,13 +1,12 @@
 #include <cstdint>
 #include <filesystem>
-#include <iostream>
 #include <optional>
 
 #include "loader.h"
 
 #include "scene.h"
 
-bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingServer) {
+bool Scene::load(const std::filesystem::path &path) {
 	std::optional<Loader::Scene> result = Loader::loadGltf(path);
 
 	if (!result.has_value())
@@ -26,7 +25,7 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 
 			// Make sure we use RGBA8, because RGB8 is not suitable for textures.
 			Image *pAlbedoImage = pImage->createRGBA8();
-			albedoTexture = pRenderingServer->textureCreate(pAlbedoImage);
+			albedoTexture = RS::getInstance().textureCreate(pAlbedoImage);
 			free(pAlbedoImage);
 
 			_textures.push_back(albedoTexture);
@@ -37,7 +36,7 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			Image *pImage = scene.images[normalIndex.value()];
 
 			Image *pNormalImage = pImage->createRG8();
-			normalTexture = pRenderingServer->textureCreate(pNormalImage);
+			normalTexture = RS::getInstance().textureCreate(pNormalImage);
 			free(pNormalImage);
 
 			_textures.push_back(normalTexture);
@@ -48,14 +47,14 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			Image *pImage = scene.images[roughnessIndex.value()];
 
 			Image *pRoughnessImage = pImage->createR8();
-			roughnessTexture = pRenderingServer->textureCreate(pRoughnessImage);
+			roughnessTexture = RS::getInstance().textureCreate(pRoughnessImage);
 			free(pRoughnessImage);
 
 			_textures.push_back(roughnessTexture);
 		}
 
 		Material material =
-				pRenderingServer->materialCreate(albedoTexture, normalTexture, roughnessTexture);
+				RS::getInstance().materialCreate(albedoTexture, normalTexture, roughnessTexture);
 		_materials.push_back(material);
 	}
 
@@ -73,7 +72,7 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			primitives.push_back(primitive);
 		}
 
-		Mesh mesh = pRenderingServer->meshCreate(primitives);
+		Mesh mesh = RS::getInstance().meshCreate(primitives);
 		_meshes.push_back(mesh);
 	}
 
@@ -83,9 +82,9 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 		Mesh mesh = _meshes[meshIndex];
 		glm::mat4 transform = sceneMeshInstance.transform;
 
-		MeshInstance meshInstance = pRenderingServer->meshInstanceCreate();
-		pRenderingServer->meshInstanceSetMesh(meshInstance, mesh);
-		pRenderingServer->meshInstanceSetTransform(meshInstance, transform);
+		MeshInstance meshInstance = RS::getInstance().meshInstanceCreate();
+		RS::getInstance().meshInstanceSetMesh(meshInstance, mesh);
+		RS::getInstance().meshInstanceSetTransform(meshInstance, transform);
 
 		_meshInstances.push_back(meshInstance);
 	}
@@ -97,11 +96,11 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			glm::vec3 color = sceneLight.color;
 			float intensity = sceneLight.intensity;
 
-			PointLight pointLight = pRenderingServer->pointLightCreate();
-			pRenderingServer->pointLightSetPosition(pointLight, position);
-			pRenderingServer->pointLightSetRange(pointLight, range);
-			pRenderingServer->pointLightSetColor(pointLight, color);
-			pRenderingServer->pointLightSetIntensity(pointLight, intensity);
+			PointLight pointLight = RS::getInstance().pointLightCreate();
+			RS::getInstance().pointLightSetPosition(pointLight, position);
+			RS::getInstance().pointLightSetRange(pointLight, range);
+			RS::getInstance().pointLightSetColor(pointLight, color);
+			RS::getInstance().pointLightSetIntensity(pointLight, intensity);
 
 			_pointLights.push_back(pointLight);
 
@@ -116,10 +115,10 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 			glm::vec3 color = sceneLight.color;
 			float intensity = sceneLight.intensity;
 
-			DirectionalLight directionalLight = pRenderingServer->directionalLightCreate();
-			pRenderingServer->directionalLightSetDirection(directionalLight, direction);
-			pRenderingServer->directionalLightSetIntensity(directionalLight, intensity);
-			pRenderingServer->directionalLightSetColor(directionalLight, color);
+			DirectionalLight directionalLight = RS::getInstance().directionalLightCreate();
+			RS::getInstance().directionalLightSetDirection(directionalLight, direction);
+			RS::getInstance().directionalLightSetIntensity(directionalLight, intensity);
+			RS::getInstance().directionalLightSetColor(directionalLight, color);
 
 			_directionalLights.push_back(directionalLight);
 
@@ -134,24 +133,24 @@ bool Scene::load(const std::filesystem::path &path, RenderingServer *pRenderingS
 	return true;
 }
 
-void Scene::clear(RenderingServer *pRenderingServer) {
+void Scene::clear() {
 	for (MeshInstance meshInstance : _meshInstances)
-		pRenderingServer->meshInstanceFree(meshInstance);
+		RS::getInstance().meshInstanceFree(meshInstance);
 
 	for (DirectionalLight directionalLight : _directionalLights)
-		pRenderingServer->directionalLightFree(directionalLight);
+		RS::getInstance().directionalLightFree(directionalLight);
 
 	for (PointLight pointLight : _pointLights)
-		pRenderingServer->pointLightFree(pointLight);
+		RS::getInstance().pointLightFree(pointLight);
 
 	for (Mesh mesh : _meshes)
-		pRenderingServer->meshFree(mesh);
+		RS::getInstance().meshFree(mesh);
 
 	for (Material material : _materials)
-		pRenderingServer->materialFree(material);
+		RS::getInstance().materialFree(material);
 
 	for (Texture texture : _textures)
-		pRenderingServer->textureFree(texture);
+		RS::getInstance().textureFree(texture);
 
 	_meshInstances.clear();
 	_pointLights.clear();

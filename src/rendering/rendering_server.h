@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <SDL2/SDL_video.h>
 #include <glm/glm.hpp>
 
 #include "../image.h"
@@ -24,6 +23,15 @@ typedef uint64_t Material;
 #define NULL_HANDLE 0
 
 class RenderingServer {
+public:
+	static RenderingServer &getInstance() {
+		static RenderingServer instance;
+		return instance;
+	}
+
+private:
+	RenderingServer() {}
+
 public:
 	struct Primitive {
 		std::vector<Vertex> vertices;
@@ -53,7 +61,6 @@ private:
 		vk::DescriptorSet textureSet;
 	};
 
-	bool _useValidation = false;
 	RenderingDevice *_pDevice;
 	uint32_t _width, _height = 0;
 
@@ -66,6 +73,9 @@ private:
 	RIDOwner<MaterialRD> _materials;
 
 public:
+	RenderingServer(RenderingServer const &) = delete;
+	void operator=(RenderingServer const &) = delete;
+
 	void cameraSetTransform(const glm::mat4 &transform);
 	void cameraSetFovY(float fovY);
 	void cameraSetZNear(float zNear);
@@ -102,14 +112,12 @@ public:
 
 	void draw();
 
-	void init(const std::vector<const char *> &extensions);
-
 	vk::Instance getVkInstance() const;
 
 	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
 	void windowResized(uint32_t width, uint32_t height);
 
-	RenderingServer(int argc, char **argv);
+	void initialize(int argc, char **argv);
 };
 
 typedef RenderingServer RS;

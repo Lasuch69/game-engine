@@ -2,6 +2,8 @@
 #include <iostream>
 #include <optional>
 
+#include <SDL2/SDL_vulkan.h>
+
 #include <glm/glm.hpp>
 
 #include "rendering_device.h"
@@ -334,10 +336,6 @@ void RenderingServer::draw() {
 	_pDevice->drawEnd(commandBuffer);
 }
 
-void RS::init(const std::vector<const char *> &extensions) {
-	_pDevice = new RenderingDevice(extensions, _useValidation);
-}
-
 vk::Instance RS::getVkInstance() const {
 	return _pDevice->getInstance();
 }
@@ -362,9 +360,23 @@ void RS::windowResized(uint32_t width, uint32_t height) {
 	_height = height;
 }
 
-RenderingServer::RenderingServer(int argc, char **argv) {
+std::vector<const char *> getRequiredExtensions() {
+	uint32_t extensionCount = 0;
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
+
+	std::vector<const char *> extensions(extensionCount);
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+
+	return extensions;
+}
+
+void RS::initialize(int argc, char **argv) {
+	bool useValidation = false;
+
 	for (int i = 1; i < argc; i++) {
 		if (strcmp("--validation", argv[i]) == 0)
-			_useValidation = true;
+			useValidation = true;
 	}
+
+	_pDevice = new RenderingDevice(getRequiredExtensions(), useValidation);
 }

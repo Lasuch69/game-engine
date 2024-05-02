@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/geometric.hpp>
-#include <vector>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_stdinc.h>
@@ -21,23 +20,11 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-std::vector<const char *> getRequiredExtensions() {
-	uint32_t extensionCount = 0;
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
-
-	std::vector<const char *> extensions(extensionCount);
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
-
-	return extensions;
-}
-
 class CameraController {
 	glm::mat4 _transform = glm::mat4(1.0f);
 
 	glm::vec3 _translation = glm::vec3(0.0f);
 	glm::vec3 _rotation = glm::vec3(0.0f);
-
-	RenderingServer *_pRS;
 
 	void _update() {
 		_transform = glm::mat4(1.0f);
@@ -46,7 +33,7 @@ class CameraController {
 		_transform = glm::rotate(_transform, _rotation.x, glm::vec3(0.0, 1.0f, 0.0)); // rotate Y
 		_transform = glm::rotate(_transform, _rotation.y, glm::vec3(1.0f, 0.0, 0.0)); // rotate X
 
-		_pRS->cameraSetTransform(_transform);
+		RS::getInstance().cameraSetTransform(_transform);
 	}
 
 public:
@@ -61,8 +48,7 @@ public:
 		_update();
 	}
 
-	CameraController(RenderingServer *pRenderingServer) {
-		_pRS = pRenderingServer;
+	CameraController() {
 		_update();
 	}
 };
@@ -82,25 +68,24 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	RS *pRS = new RS(argc, argv);
-	pRS->init(getRequiredExtensions());
+	RS::getInstance().initialize(argc, argv);
 
 	VkSurfaceKHR surface;
-	SDL_Vulkan_CreateSurface(pWindow, pRS->getVkInstance(), &surface);
+	SDL_Vulkan_CreateSurface(pWindow, RS::getInstance().getVkInstance(), &surface);
 
 	int width, height;
 	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-	pRS->windowInit(surface, width, height);
+	RS::getInstance().windowInit(surface, width, height);
 
 	Scene *pScene = new Scene;
 
-	CameraController cameraController(pRS);
+	CameraController cameraController;
 
 	for (int i = 1; i < argc; i++) {
 		// --scene <path>
 		if (strcmp("--scene", argv[i]) == 0 && i < argc - 1) {
 			std::filesystem::path path(argv[i + 1]);
-			pScene->load(path, pRS);
+			pScene->load(path);
 		}
 	}
 
@@ -127,7 +112,7 @@ int main(int argc, char *argv[]) {
 					case SDL_WINDOWEVENT_RESIZED:
 						int width, height;
 						SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-						pRS->windowResized(width, height);
+						RS::getInstance().windowResized(width, height);
 						break;
 					default:
 						break;
@@ -138,8 +123,8 @@ int main(int argc, char *argv[]) {
 				std::filesystem::path path(pFile);
 				SDL_free(pFile);
 
-				pScene->clear(pRS);
-				pScene->load(path, pRS);
+				pScene->clear();
+				pScene->load(path);
 			}
 		}
 
@@ -158,7 +143,7 @@ int main(int argc, char *argv[]) {
 		cameraController.rotate(glm::vec2(x, y) * 0.005f);
 		cameraController.move(input * deltaTime);
 
-		pRS->draw();
+		RS::getInstance().draw();
 	}
 
 	SDL_DestroyWindow(pWindow);

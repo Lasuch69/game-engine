@@ -430,7 +430,7 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 
 	vk::PhysicalDeviceMemoryProperties memProperties = _physicalDevice.getMemoryProperties();
 
-	vk::Format colorFormat = vk::Format::eR16G16B16A16Sfloat;
+	vk::Format colorFormat = vk::Format::eB10G11R11UfloatPack32;
 
 	_color.create(_device, _width, _height, colorFormat,
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,

@@ -28,8 +28,21 @@ void CameraController::_move(const glm::vec2 &input) {
 }
 
 void CameraController::update(float deltaTime) {
+	if (SDL_GetRelativeMouseMode() == false) {
+		_reset = true;
+		return;
+	}
+
 	int x, y;
 	SDL_GetRelativeMouseState(&x, &y);
+
+	if (_reset) {
+		x = 0;
+		y = 0;
+
+		_reset = false;
+	}
+
 	_rotate(glm::vec2(x, y) * 0.005f);
 
 	const uint8_t *keys = SDL_GetKeyboardState(nullptr);

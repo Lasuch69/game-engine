@@ -1,3 +1,5 @@
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_mouse.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -61,8 +63,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	SDL_SetRelativeMouseMode(SDL_TRUE);
-
 	Time time;
 	CameraController camera;
 
@@ -93,6 +93,13 @@ int main(int argc, char *argv[]) {
 
 				pScene->clear();
 				pScene->load(path);
+			}
+			if (event.type == SDL_KEYDOWN) {
+				if (event.key.keysym.sym != SDLK_F2)
+					continue;
+
+				bool isRelative = SDL_GetRelativeMouseMode();
+				SDL_SetRelativeMouseMode((SDL_bool)!isRelative);
 			}
 		}
 

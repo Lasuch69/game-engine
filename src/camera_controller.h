@@ -9,6 +9,8 @@ public:
 	const float SPEED = 3.0f;
 
 private:
+	bool _reset = false;
+
 	glm::vec3 _translation = glm::vec3(0.0f);
 	glm::vec3 _rotation = glm::vec3(0.0f);
 	glm::mat4 _transform = glm::mat4(1.0f);

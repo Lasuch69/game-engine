@@ -1,11 +1,4 @@
 cmake_minimum_required(VERSION 3.12)
-
-cmake_policy(SET CMP0077 NEW)
-
-if ("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" VERSION_GREATER_EQUAL "3.24")
-    cmake_policy(SET CMP0135 NEW)
-endif()
-
 project(hayaku VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -24,23 +17,23 @@ set(LIBRARIES "SDL2;Vulkan::Vulkan")
 # compile shaders
 execute_process(COMMAND python3 shader_gen.py)
 
-include(FetchContent)
+set(FASTGLTF_SRC thirdparty/fastgltf/src)
+set(FASTGLTF_DEPS thirdparty/fastgltf/deps)
 
-FetchContent_Declare(
-  fastgltf
-  URL https://github.com/spnda/fastgltf/archive/refs/tags/v0.7.1.zip # 0.7.1 release
-)
+include_directories(thirdparty/fastgltf/include)
 
-FetchContent_MakeAvailable(fastgltf)
+add_library(fastgltf ${FASTGLTF_SRC}/fastgltf.cpp ${FASTGLTF_SRC}/base64.cpp ${FASTGLTF_DEPS}/simdjson/simdjson.cpp)
+target_include_directories(fastgltf PRIVATE ${FASTGLTF_DEPS}/simdjson)
+target_compile_options(fastgltf PRIVATE -O3)
 
-include_directories(include thirdparty)
-
-file(GLOB_RECURSE thirdparty_SOURCE thirdparty/*.cpp)
+include_directories(include thirdparty/stb thirdparty/vma thirdparty/fastgltf/include)
 
 file(GLOB_RECURSE SOURCE src/*.cpp)
 
-add_executable(hayaku ${SOURCE} ${thirdparty_SOURCE})
+set(THIRDPARTY_INCLUDE thirdparty/stb/include thirdparty/vma/include thirdparty/fastgltf/include)
 
+add_executable(hayaku ${SOURCE} thirdparty/stb/stb_image.cpp thirdparty/vma/vk_mem_alloc.cpp)
+target_include_directories(hayaku PRIVATE include ${THIRDPARTY_INCLUDE})
 target_compile_options(hayaku PRIVATE -Wall -O2)
 
 target_link_libraries(hayaku ${LIBRARIES} fastgltf)

@@ -16,5 +16,6 @@ _deps
 # compile output
 *.so
 *.o
+*.a
 
 hayaku

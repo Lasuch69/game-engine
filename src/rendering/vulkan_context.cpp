@@ -255,71 +255,6 @@ bool checkValidationLayerSupport() {
 	return true;
 }
 
-uint32_t findMemoryType(uint32_t typeFilter, vk::PhysicalDeviceMemoryProperties memProperties,
-		vk::MemoryPropertyFlags properties) {
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) &&
-				(memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	throw std::runtime_error("Failed to find suitable memory type!");
-}
-
-vk::Image createImage(vk::Device device, uint32_t width, uint32_t height, vk::Format format,
-		vk::ImageUsageFlags usage, vk::PhysicalDeviceMemoryProperties memProperties,
-		vk::DeviceMemory *pMemory) {
-	vk::ImageCreateInfo createInfo = {};
-	createInfo.setImageType(vk::ImageType::e2D);
-	createInfo.setExtent(vk::Extent3D(width, height, 1));
-	createInfo.setMipLevels(1);
-	createInfo.setArrayLayers(1);
-	createInfo.setFormat(format);
-	createInfo.setTiling(vk::ImageTiling::eOptimal);
-	createInfo.setInitialLayout(vk::ImageLayout::eUndefined);
-	createInfo.setUsage(usage);
-	createInfo.setSamples(vk::SampleCountFlagBits::e1);
-	createInfo.setSharingMode(vk::SharingMode::eExclusive);
-
-	vk::Image image = device.createImage(createInfo);
-
-	vk::MemoryRequirements memRequirements = device.getImageMemoryRequirements(image);
-
-	uint32_t memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, memProperties,
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-	vk::MemoryAllocateInfo allocInfo = {};
-	allocInfo.setAllocationSize(memRequirements.size);
-	allocInfo.setMemoryTypeIndex(memoryTypeIndex);
-
-	vk::Result err = device.allocateMemory(&allocInfo, nullptr, pMemory);
-
-	if (err != vk::Result::eSuccess)
-		throw std::runtime_error("Failed to allocate image memory!");
-
-	device.bindImageMemory(image, *pMemory, 0);
-	return image;
-}
-
-vk::ImageView createImageView(vk::Device device, vk::Image image, vk::Format format,
-		vk::ImageAspectFlagBits aspectFlags) {
-	vk::ImageSubresourceRange subresourceRange = {};
-	subresourceRange.setAspectMask(aspectFlags);
-	subresourceRange.setBaseMipLevel(0);
-	subresourceRange.setLevelCount(1);
-	subresourceRange.setBaseArrayLayer(0);
-	subresourceRange.setLayerCount(1);
-
-	vk::ImageViewCreateInfo createInfo = {};
-	createInfo.setImage(image);
-	createInfo.setViewType(vk::ImageViewType::e2D);
-	createInfo.setFormat(format);
-	createInfo.setSubresourceRange(subresourceRange);
-
-	return device.createImageView(createInfo);
-}
-
 vk::SurfaceFormatKHR getSurfaceFormat(std::vector<vk::SurfaceFormatKHR> surfaceFormats) {
 	assert(!surfaceFormats.empty());
 
@@ -346,23 +281,6 @@ vk::PresentModeKHR choosePresentMode(std::vector<vk::PresentModeKHR> presentMode
 	}
 
 	return vk::PresentModeKHR::eFifo;
-}
-
-vk::ImageView FramebufferAttachment::getImageView() const {
-	return _imageView;
-}
-
-void FramebufferAttachment::create(vk::Device device, uint32_t width, uint32_t height,
-		vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlagBits aspectFlags,
-		vk::PhysicalDeviceMemoryProperties memProperties) {
-	_image = createImage(device, width, height, format, usage, memProperties, &_imageMemory);
-	_imageView = createImageView(device, _image, format, aspectFlags);
-}
-
-void FramebufferAttachment::destroy(vk::Device device) {
-	device.destroyImageView(_imageView, nullptr);
-	device.destroyImage(_image, nullptr);
-	device.freeMemory(_imageMemory, nullptr);
 }
 
 void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
@@ -431,14 +349,12 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 	vk::PhysicalDeviceMemoryProperties memProperties = _physicalDevice.getMemoryProperties();
 
 	vk::Format colorFormat = vk::Format::eB10G11R11UfloatPack32;
-
-	_color.create(_device, _width, _height, colorFormat,
+	_color = Attachment::create(_device, _width, _height, colorFormat,
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
 			vk::ImageAspectFlagBits::eColor, memProperties);
 
 	vk::Format depthFormat = vk::Format::eD32Sfloat;
-
-	_depth.create(_device, _width, _height, depthFormat,
+	_depth = Attachment::create(_device, _width, _height, depthFormat,
 			vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::ImageAspectFlagBits::eDepth,
 			memProperties);
 
@@ -555,9 +471,21 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 
 	// framebuffers
 
+	vk::ImageSubresourceRange subresourceRange = {};
+	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	subresourceRange.setBaseMipLevel(0);
+	subresourceRange.setLevelCount(1);
+	subresourceRange.setBaseArrayLayer(0);
+	subresourceRange.setLayerCount(1);
+
 	for (size_t i = 0; i < images.size(); i++) {
-		vk::ImageView finalColorView = createImageView(
-				_device, images[i], surfaceFormat.format, vk::ImageAspectFlagBits::eColor);
+		vk::ImageViewCreateInfo createInfo = {};
+		createInfo.setImage(images[i]);
+		createInfo.setViewType(vk::ImageViewType::e2D);
+		createInfo.setFormat(surfaceFormat.format);
+		createInfo.setSubresourceRange(subresourceRange);
+
+		vk::ImageView finalColorView = _device.createImageView(createInfo);
 
 		std::array<vk::ImageView, 3> attachmentViews = {
 			finalColorView,
@@ -666,7 +594,7 @@ vk::Framebuffer VulkanContext::getFramebuffer(uint32_t imageIndex) const {
 	return _swapchainImages[imageIndex].framebuffer;
 }
 
-FramebufferAttachment VulkanContext::getColorAttachment() const {
+Attachment VulkanContext::getColorAttachment() const {
 	return _color;
 }
 

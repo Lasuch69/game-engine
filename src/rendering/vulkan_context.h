@@ -6,27 +6,14 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include "types/attachment.h"
+
 const std::vector<const char *> VALIDATION_LAYERS = { "VK_LAYER_KHRONOS_validation" };
 const std::vector<const char *> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 const uint32_t DEPTH_PASS = 0;
 const uint32_t MAIN_PASS = 1;
 const uint32_t TONEMAP_PASS = 2;
-
-class FramebufferAttachment {
-private:
-	vk::Image _image = {};
-	vk::DeviceMemory _imageMemory = {};
-	vk::ImageView _imageView = {};
-
-public:
-	vk::ImageView getImageView() const;
-
-	void create(vk::Device device, uint32_t width, uint32_t height, vk::Format format,
-			vk::ImageUsageFlags usage, vk::ImageAspectFlagBits aspectFlags,
-			vk::PhysicalDeviceMemoryProperties memProperties);
-	void destroy(vk::Device device);
-};
 
 class VulkanContext {
 private:
@@ -52,8 +39,8 @@ private:
 	vk::Extent2D _swapchainExtent;
 	vk::RenderPass _renderPass;
 
-	FramebufferAttachment _color;
-	FramebufferAttachment _depth;
+	Attachment _color;
+	Attachment _depth;
 
 	vk::CommandPool _commandPool;
 
@@ -81,7 +68,7 @@ public:
 	vk::RenderPass getRenderPass() const;
 	vk::Framebuffer getFramebuffer(uint32_t imageIndex) const;
 
-	FramebufferAttachment getColorAttachment() const;
+	Attachment getColorAttachment() const;
 
 	vk::CommandPool getCommandPool() const;
 

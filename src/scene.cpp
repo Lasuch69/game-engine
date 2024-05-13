@@ -15,46 +15,38 @@ bool Scene::load(const std::filesystem::path &path) {
 	Loader::Scene scene = result.value();
 
 	for (const Loader::Material &sceneMaterial : scene.materials) {
-		Texture albedoTexture = NULL_HANDLE;
-		Texture normalTexture = NULL_HANDLE;
-		Texture roughnessTexture = NULL_HANDLE;
+		Texture albedo = NULL_HANDLE;
+		Texture normal = NULL_HANDLE;
+		Texture roughness = NULL_HANDLE;
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
 		if (albedoIndex.has_value()) {
-			Image *pImage = scene.images[albedoIndex.value()];
+			Image *pAlbedoMap = scene.images[albedoIndex.value()];
+			albedo = RS::getInstance().textureCreate(pAlbedoMap);
+			_textures.push_back(albedo);
 
-			// Make sure we use RGBA8, because RGB8 is not suitable for textures.
-			Image *pAlbedoImage = pImage->createRGBA8();
-			albedoTexture = RS::getInstance().textureCreate(pAlbedoImage);
-			free(pAlbedoImage);
-
-			_textures.push_back(albedoTexture);
+			// free(pAlbedoMap);
 		}
 
 		std::optional<size_t> normalIndex = sceneMaterial.normalIndex;
 		if (normalIndex.has_value()) {
-			Image *pImage = scene.images[normalIndex.value()];
+			Image *pNormalMap = scene.images[normalIndex.value()];
+			normal = RS::getInstance().textureCreate(pNormalMap);
+			_textures.push_back(normal);
 
-			Image *pNormalImage = pImage->createRG8();
-			normalTexture = RS::getInstance().textureCreate(pNormalImage);
-			free(pNormalImage);
-
-			_textures.push_back(normalTexture);
+			// free(pNormalMap);
 		}
 
 		std::optional<size_t> roughnessIndex = sceneMaterial.roughnessIndex;
 		if (roughnessIndex.has_value()) {
-			Image *pImage = scene.images[roughnessIndex.value()];
+			Image *pRoughnessMap = scene.images[roughnessIndex.value()];
+			roughness = RS::getInstance().textureCreate(pRoughnessMap);
+			_textures.push_back(roughness);
 
-			Image *pRoughnessImage = pImage->createR8();
-			roughnessTexture = RS::getInstance().textureCreate(pRoughnessImage);
-			free(pRoughnessImage);
-
-			_textures.push_back(roughnessTexture);
+			// free(pRoughnessMap);
 		}
 
-		Material material =
-				RS::getInstance().materialCreate(albedoTexture, normalTexture, roughnessTexture);
+		Material material = RS::getInstance().materialCreate(albedo, normal, roughness);
 		_materials.push_back(material);
 	}
 

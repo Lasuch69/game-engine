@@ -4,13 +4,6 @@
 #include <cstdint>
 #include <vector>
 
-struct Color {
-	uint8_t r, g, b = 0;
-	uint8_t a = 255;
-
-	uint8_t getLuminance() const;
-};
-
 class Image {
 public:
 	enum class Format {
@@ -22,29 +15,37 @@ public:
 		RGBA8,
 	};
 
+	enum class RoughnessChannel {
+		R,
+		G,
+		B,
+		A,
+	};
+
 private:
-	uint32_t _width, _height = 0;
+	uint32_t _width, _height;
 	Format _format = Format::L8;
 	std::vector<uint8_t> _data = {};
 
-	Image *_create(Format format) const;
+	struct Color {
+		uint8_t r, g, b = 0;
+		uint8_t a = 255;
+	};
+
+	Color _getPixelAtOffset(size_t offset) const;
+	void _setPixelAtOffset(size_t offset, const Color &color);
 
 public:
-	static Image::Format getFormatFromChannels(uint32_t channels);
-	static uint32_t getChannelsFromFormat(Image::Format format);
-
-	Color getPixel(uint32_t idx) const;
-	void setPixel(uint32_t idx, const Color &color);
-
-	Image *createR8() const;
-	Image *createRG8() const;
-	Image *createRGBA8() const;
+	Image *getColorMap() const;
+	Image *getNormalMap() const;
+	Image *getRoughnessMap(RoughnessChannel channel) const;
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;
 	Format getFormat() const;
+	std::vector<uint8_t> getData() const;
 
-	const std::vector<uint8_t> &getData() const;
+	uint32_t getPixelSize() const;
 
 	Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);
 	Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data);

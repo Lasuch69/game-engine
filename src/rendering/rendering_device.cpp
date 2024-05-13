@@ -447,7 +447,7 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
 					vk::ImageUsageFlagBits::eSampled);
 
-	const std::vector<uint8_t> &data = pImage->getData();
+	std::vector<uint8_t> data = pImage->getData();
 
 	VmaAllocationInfo stagingAllocInfo;
 	AllocatedBuffer stagingBuffer =

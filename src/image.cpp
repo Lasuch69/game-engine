@@ -1,18 +1,9 @@
-#include <cmath>
 #include <cstdint>
 #include <vector>
 
 #include "image.h"
 
-uint8_t Color::getLuminance() const {
-	float _r = static_cast<float>(r) * 0.2126f;
-	float _g = static_cast<float>(g) * 0.7152f;
-	float _b = static_cast<float>(b) * 0.0722f;
-
-	return std::round(_r + _g + _b);
-}
-
-Image::Format Image::getFormatFromChannels(uint32_t channels) {
+static Image::Format channelsToFormat(uint32_t channels) {
 	switch (channels) {
 		case 1:
 			return Image::Format::R8;
@@ -27,7 +18,7 @@ Image::Format Image::getFormatFromChannels(uint32_t channels) {
 	return Image::Format::R8;
 }
 
-uint32_t Image::getChannelsFromFormat(Image::Format format) {
+static uint32_t formatToChannels(Image::Format format) {
 	switch (format) {
 		case Image::Format::R8:
 		case Image::Format::L8:
@@ -44,8 +35,8 @@ uint32_t Image::getChannelsFromFormat(Image::Format format) {
 	return 1;
 }
 
-Color Image::getPixel(uint32_t idx) const {
-	uint32_t i = idx * getChannelsFromFormat(_format);
+Image::Color Image::_getPixelAtOffset(size_t offset) const {
+	uint32_t i = offset * formatToChannels(_format);
 
 	Color color = {};
 
@@ -78,8 +69,8 @@ Color Image::getPixel(uint32_t idx) const {
 	return color;
 }
 
-void Image::setPixel(uint32_t idx, const Color &color) {
-	uint32_t i = idx * getChannelsFromFormat(_format);
+void Image::_setPixelAtOffset(size_t offset, const Color &color) {
+	uint32_t i = offset * formatToChannels(_format);
 
 	switch (_format) {
 		case Format::R8:
@@ -108,32 +99,70 @@ void Image::setPixel(uint32_t idx, const Color &color) {
 	}
 }
 
-Image *Image::_create(Format format) const {
-	uint32_t pixelCount = _width * _height;
-	uint32_t channels = getChannelsFromFormat(format);
+Image *Image::getColorMap() const {
+	Format format = Format::RGBA8;
+	size_t pixelCount = _width * _height;
+	uint32_t channels = formatToChannels(format);
 
-	std::vector<uint8_t> data(pixelCount * channels);
+	std::vector<uint8_t> newData(pixelCount * channels);
+	Image *pColorMap = new Image(_width, _height, format, newData);
 
-	Image *pImage = new Image(_width, _height, format, data);
-
-	for (uint32_t i = 0; i < pixelCount; i++) {
-		Color c = getPixel(i);
-		pImage->setPixel(i, c);
+	for (size_t offset = 0; offset < pixelCount; offset++) {
+		Color src = _getPixelAtOffset(offset);
+		pColorMap->_setPixelAtOffset(offset, src);
 	}
 
-	return pImage;
+	return pColorMap;
 }
 
-Image *Image::createR8() const {
-	return _create(Format::R8);
+Image *Image::getNormalMap() const {
+	Format format = Format::RG8;
+	size_t pixelCount = _width * _height;
+	uint32_t channels = formatToChannels(format);
+
+	std::vector<uint8_t> newData(pixelCount * channels);
+	Image *pNormalMap = new Image(_width, _height, format, newData);
+
+	for (size_t offset = 0; offset < pixelCount; offset++) {
+		Color src = _getPixelAtOffset(offset);
+		pNormalMap->_setPixelAtOffset(offset, src);
+	}
+
+	return pNormalMap;
 }
 
-Image *Image::createRG8() const {
-	return _create(Format::RG8);
-}
+Image *Image::getRoughnessMap(RoughnessChannel channel) const {
+	Format format = Format::R8;
+	size_t pixelCount = _width * _height;
+	uint32_t channels = formatToChannels(format);
 
-Image *Image::createRGBA8() const {
-	return _create(Format::RGBA8);
+	std::vector<uint8_t> newData(pixelCount * channels);
+	Image *pRoughnessMap = new Image(_width, _height, format, newData);
+
+	for (size_t offset = 0; offset < pixelCount; offset++) {
+		Color src = _getPixelAtOffset(offset);
+		Color dst;
+
+		// swizzle
+		switch (channel) {
+			case RoughnessChannel::R:
+				dst.r = src.r;
+				break;
+			case RoughnessChannel::G:
+				dst.r = src.g;
+				break;
+			case RoughnessChannel::B:
+				dst.r = src.b;
+				break;
+			case RoughnessChannel::A:
+				dst.r = src.a;
+				break;
+		}
+
+		pRoughnessMap->_setPixelAtOffset(offset, dst);
+	}
+
+	return pRoughnessMap;
 }
 
 uint32_t Image::getWidth() const {
@@ -148,8 +177,12 @@ Image::Format Image::getFormat() const {
 	return _format;
 }
 
-const std::vector<uint8_t> &Image::getData() const {
+std::vector<uint8_t> Image::getData() const {
 	return _data;
+}
+
+uint32_t Image::getPixelSize() const {
+	return formatToChannels(_format);
 }
 
 Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
@@ -160,10 +193,8 @@ Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<u
 }
 
 Image::Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data) {
-	Image::Format format = getFormatFromChannels(channels);
-
 	_width = width;
 	_height = height;
-	_format = format;
+	_format = channelsToFormat(channels);
 	_data = data;
 }

@@ -235,9 +235,11 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Image &gltfImage = pAsset->images[albedoInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			uint32_t idx = images.size();
-			images.push_back(pImage);
+			Image *pAlbedoMap = pImage->getColorMap();
+			free(pImage);
 
+			uint32_t idx = images.size();
+			images.push_back(pAlbedoMap);
 			material.albedoIndex = idx;
 		}
 
@@ -247,9 +249,11 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Image &gltfImage = pAsset->images[normalInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			uint32_t idx = images.size();
-			images.push_back(pImage);
+			Image *pNormalMap = pImage->getNormalMap();
+			free(pImage);
 
+			uint32_t idx = images.size();
+			images.push_back(pNormalMap);
 			material.normalIndex = idx;
 		}
 
@@ -260,9 +264,12 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Image &gltfImage = pAsset->images[roughnessInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			uint32_t idx = images.size();
-			images.push_back(pImage);
+			// GlTF stores roughness in green channel
+			Image *pRoughnessMap = pImage->getRoughnessMap(Image::RoughnessChannel::G);
+			free(pImage);
 
+			uint32_t idx = images.size();
+			images.push_back(pRoughnessMap);
 			material.roughnessIndex = idx;
 		}
 

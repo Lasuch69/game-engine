@@ -21,29 +21,23 @@ bool Scene::load(const std::filesystem::path &path) {
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
 		if (albedoIndex.has_value()) {
-			Image *pAlbedoMap = scene.images[albedoIndex.value()];
-			albedo = RS::getInstance().textureCreate(pAlbedoMap);
+			std::shared_ptr<Image> albedoMap = scene.images[albedoIndex.value()];
+			albedo = RS::getInstance().textureCreate(albedoMap);
 			_textures.push_back(albedo);
-
-			// free(pAlbedoMap);
 		}
 
 		std::optional<size_t> normalIndex = sceneMaterial.normalIndex;
 		if (normalIndex.has_value()) {
-			Image *pNormalMap = scene.images[normalIndex.value()];
-			normal = RS::getInstance().textureCreate(pNormalMap);
+			std::shared_ptr<Image> normalMap = scene.images[normalIndex.value()];
+			normal = RS::getInstance().textureCreate(normalMap);
 			_textures.push_back(normal);
-
-			// free(pNormalMap);
 		}
 
 		std::optional<size_t> roughnessIndex = sceneMaterial.roughnessIndex;
 		if (roughnessIndex.has_value()) {
-			Image *pRoughnessMap = scene.images[roughnessIndex.value()];
-			roughness = RS::getInstance().textureCreate(pRoughnessMap);
+			std::shared_ptr<Image> roughnessMap = scene.images[roughnessIndex.value()];
+			roughness = RS::getInstance().textureCreate(roughnessMap);
 			_textures.push_back(roughness);
-
-			// free(pRoughnessMap);
 		}
 
 		Material material = RS::getInstance().materialCreate(albedo, normal, roughness);
@@ -116,10 +110,6 @@ bool Scene::load(const std::filesystem::path &path) {
 
 			continue;
 		}
-	}
-
-	for (Image *pImage : scene.images) {
-		free(pImage);
 	}
 
 	return true;

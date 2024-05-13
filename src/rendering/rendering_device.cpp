@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <stdexcept>
 
 #include "shaders/depth.gen.h"
@@ -418,15 +419,15 @@ void RenderingDevice::samplerDestroy(vk::Sampler sampler) {
 	_pContext->getDevice().destroySampler(sampler);
 }
 
-TextureRD RenderingDevice::textureCreate(Image *pImage) {
-	uint32_t width = pImage->getWidth();
-	uint32_t height = pImage->getHeight();
+TextureRD RenderingDevice::textureCreate(std::shared_ptr<Image> image) {
+	uint32_t width = image->getWidth();
+	uint32_t height = image->getHeight();
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
 
 	vk::Format format = vk::Format::eUndefined;
 
-	switch (pImage->getFormat()) {
+	switch (image->getFormat()) {
 		case Image::Format::R8:
 		case Image::Format::L8:
 			format = vk::Format::eR8Unorm;
@@ -443,11 +444,11 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 			break;
 	}
 
-	AllocatedImage image = imageCreate(width, height, format, mipLevels,
+	AllocatedImage allocatedImage = imageCreate(width, height, format, mipLevels,
 			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
 					vk::ImageUsageFlagBits::eSampled);
 
-	std::vector<uint8_t> data = pImage->getData();
+	std::vector<uint8_t> data = image->getData();
 
 	VmaAllocationInfo stagingAllocInfo;
 	AllocatedBuffer stagingBuffer =
@@ -455,21 +456,21 @@ TextureRD RenderingDevice::textureCreate(Image *pImage) {
 	memcpy(stagingAllocInfo.pMappedData, data.data(), data.size());
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
 
-	_transitionImageLayout(image.image, format, mipLevels, vk::ImageLayout::eUndefined,
+	_transitionImageLayout(allocatedImage.image, format, mipLevels, vk::ImageLayout::eUndefined,
 			vk::ImageLayout::eTransferDstOptimal);
 
-	_bufferCopyToImage(stagingBuffer.buffer, image.image, width, height);
+	_bufferCopyToImage(stagingBuffer.buffer, allocatedImage.image, width, height);
 
 	bufferDestroy(stagingBuffer);
 
 	// Transfers image layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-	_generateMipmaps(image.image, width, height, format, mipLevels);
+	_generateMipmaps(allocatedImage.image, width, height, format, mipLevels);
 
-	vk::ImageView imageView = imageViewCreate(image.image, format, mipLevels);
+	vk::ImageView imageView = imageViewCreate(allocatedImage.image, format, mipLevels);
 	vk::Sampler sampler = samplerCreate(vk::Filter::eLinear, mipLevels);
 
 	return {
-		image,
+		allocatedImage,
 		imageView,
 		sampler,
 	};

@@ -2,6 +2,7 @@
 #define RENDERING_SERVER_H
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -103,7 +104,7 @@ public:
 	void pointLightSetIntensity(PointLight pointLight, float intensity);
 	void pointLightFree(PointLight pointLight);
 
-	Texture textureCreate(Image *pImage);
+	Texture textureCreate(const std::shared_ptr<Image> image);
 	void textureFree(Texture texture);
 
 	Material materialCreate(Texture albedo = NULL_HANDLE, Texture normal = NULL_HANDLE,

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -53,7 +54,7 @@ struct Light {
 };
 
 struct Scene {
-	std::vector<Image *> images;
+	std::vector<std::shared_ptr<Image>> images;
 	std::vector<Material> materials;
 	std::vector<Mesh> meshes;
 	std::vector<MeshInstance> meshInstances;

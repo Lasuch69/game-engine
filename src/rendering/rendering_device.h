@@ -2,6 +2,7 @@
 #define RENDERING_DEVICE_H
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include <glm/glm.hpp>
@@ -102,7 +103,7 @@ public:
 	vk::Sampler samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias = 0.0f);
 	void samplerDestroy(vk::Sampler sampler);
 
-	TextureRD textureCreate(Image *pImage);
+	TextureRD textureCreate(const std::shared_ptr<Image> image);
 
 	void updateUniformBuffer(const glm::vec3 &viewPosition);
 

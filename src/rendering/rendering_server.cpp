@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <optional>
 
 #include <SDL2/SDL_vulkan.h>
@@ -176,11 +177,11 @@ void RS::pointLightFree(PointLight pointLight) {
 	_pDevice->getLightStorage().pointLightFree(pointLight);
 }
 
-Texture RS::textureCreate(Image *pImage) {
-	if (pImage == nullptr)
+Texture RS::textureCreate(const std::shared_ptr<Image> image) {
+	if (image == nullptr)
 		return NULL_HANDLE;
 
-	TextureRD _texture = _pDevice->textureCreate(pImage);
+	TextureRD _texture = _pDevice->textureCreate(image);
 	return _textures.insert(_texture);
 }
 
@@ -346,11 +347,11 @@ void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_width = width;
 	_height = height;
 
-	Image *pImage = new Image(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 });
+	std::shared_ptr<Image> whiteImage(
+			new Image(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 }));
 
 	// create fallback white texture
-	_whiteTexture = textureCreate(pImage);
-	free(pImage);
+	_whiteTexture = textureCreate(whiteImage);
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {

@@ -15,6 +15,7 @@
 
 #include <stb/stb_image.h>
 
+#include "image.h"
 #include "loader.h"
 
 // needed for candela to lumen conversion
@@ -219,7 +220,7 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 
 	fastgltf::Asset *pAsset = result.get_if();
 
-	std::vector<Image *> images;
+	std::vector<std::shared_ptr<Image>> images;
 	std::vector<Material> materials;
 	std::vector<Mesh> meshes;
 	std::vector<MeshInstance> meshInstances;
@@ -235,11 +236,11 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Image &gltfImage = pAsset->images[albedoInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			Image *pAlbedoMap = pImage->getColorMap();
+			std::shared_ptr<Image> albedoMap(pImage->getColorMap());
 			free(pImage);
 
 			uint32_t idx = images.size();
-			images.push_back(pAlbedoMap);
+			images.push_back(albedoMap);
 			material.albedoIndex = idx;
 		}
 
@@ -249,11 +250,11 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Image &gltfImage = pAsset->images[normalInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			Image *pNormalMap = pImage->getNormalMap();
+			std::shared_ptr<Image> normalMap(pImage->getNormalMap());
 			free(pImage);
 
 			uint32_t idx = images.size();
-			images.push_back(pNormalMap);
+			images.push_back(normalMap);
 			material.normalIndex = idx;
 		}
 
@@ -265,11 +266,12 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
 			// GlTF stores roughness in green channel
-			Image *pRoughnessMap = pImage->getRoughnessMap(Image::RoughnessChannel::G);
+			Image::RoughnessChannel channel = Image::RoughnessChannel::G;
+			std::shared_ptr<Image> roughnessMap(pImage->getRoughnessMap(channel));
 			free(pImage);
 
 			uint32_t idx = images.size();
-			images.push_back(pRoughnessMap);
+			images.push_back(roughnessMap);
 			material.roughnessIndex = idx;
 		}
 

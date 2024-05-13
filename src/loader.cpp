@@ -234,10 +234,9 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 
 		if (albedoInfo.has_value()) {
 			fastgltf::Image &gltfImage = pAsset->images[albedoInfo->textureIndex];
-			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
+			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
 
-			std::shared_ptr<Image> albedoMap(pImage->getColorMap());
-			free(pImage);
+			std::shared_ptr<Image> albedoMap(image->getColorMap());
 
 			uint32_t idx = images.size();
 			images.push_back(albedoMap);
@@ -248,10 +247,9 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 
 		if (normalInfo.has_value()) {
 			fastgltf::Image &gltfImage = pAsset->images[normalInfo->textureIndex];
-			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
+			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
 
-			std::shared_ptr<Image> normalMap(pImage->getNormalMap());
-			free(pImage);
+			std::shared_ptr<Image> normalMap(image->getNormalMap());
 
 			uint32_t idx = images.size();
 			images.push_back(normalMap);
@@ -263,11 +261,11 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 
 		if (metallicRoughnessInfo.has_value()) {
 			fastgltf::Image &gltfImage = pAsset->images[metallicRoughnessInfo->textureIndex];
-			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
+			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
 
 			{
 				// metallic in blue channel
-				std::shared_ptr<Image> metallicMap(pImage->getMetallicMap(Image::Channel::B));
+				std::shared_ptr<Image> metallicMap(image->getMetallicMap(Image::Channel::B));
 
 				uint32_t idx = images.size();
 				images.push_back(metallicMap);
@@ -277,14 +275,13 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 
 			{
 				// roughness in green channel
-				std::shared_ptr<Image> roughnessMap(pImage->getRoughnessMap(Image::Channel::G));
+				std::shared_ptr<Image> roughnessMap(image->getRoughnessMap(Image::Channel::G));
 
 				uint32_t idx = images.size();
 				images.push_back(roughnessMap);
 
 				material.roughnessIndex = idx;
 			}
-			free(pImage);
 		}
 
 		materials.push_back(material);

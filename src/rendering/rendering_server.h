@@ -108,7 +108,7 @@ public:
 	void textureFree(Texture texture);
 
 	Material materialCreate(Texture albedo = NULL_HANDLE, Texture normal = NULL_HANDLE,
-			Texture roughness = NULL_HANDLE);
+			Texture metallic = NULL_HANDLE, Texture roughness = NULL_HANDLE);
 	void materialFree(Material material);
 
 	void draw();

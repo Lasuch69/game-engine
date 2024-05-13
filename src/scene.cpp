@@ -17,6 +17,7 @@ bool Scene::load(const std::filesystem::path &path) {
 	for (const Loader::Material &sceneMaterial : scene.materials) {
 		Texture albedo = NULL_HANDLE;
 		Texture normal = NULL_HANDLE;
+		Texture metallic = NULL_HANDLE;
 		Texture roughness = NULL_HANDLE;
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
@@ -33,6 +34,13 @@ bool Scene::load(const std::filesystem::path &path) {
 			_textures.push_back(normal);
 		}
 
+		std::optional<size_t> metallicIndex = sceneMaterial.metallicIndex;
+		if (metallicIndex.has_value()) {
+			std::shared_ptr<Image> metallicMap = scene.images[metallicIndex.value()];
+			metallic = RS::getInstance().textureCreate(metallicMap);
+			_textures.push_back(metallic);
+		}
+
 		std::optional<size_t> roughnessIndex = sceneMaterial.roughnessIndex;
 		if (roughnessIndex.has_value()) {
 			std::shared_ptr<Image> roughnessMap = scene.images[roughnessIndex.value()];
@@ -40,7 +48,7 @@ bool Scene::load(const std::filesystem::path &path) {
 			_textures.push_back(roughness);
 		}
 
-		Material material = RS::getInstance().materialCreate(albedo, normal, roughness);
+		Material material = RS::getInstance().materialCreate(albedo, normal, metallic, roughness);
 		_materials.push_back(material);
 	}
 

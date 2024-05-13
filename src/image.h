@@ -15,7 +15,7 @@ public:
 		RGBA8,
 	};
 
-	enum class RoughnessChannel {
+	enum class Channel {
 		R,
 		G,
 		B,
@@ -38,7 +38,8 @@ private:
 public:
 	Image *getColorMap() const;
 	Image *getNormalMap() const;
-	Image *getRoughnessMap(RoughnessChannel channel) const;
+	Image *getMetallicMap(Channel channel) const;
+	Image *getRoughnessMap(Channel channel) const;
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;

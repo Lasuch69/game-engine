@@ -258,21 +258,33 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			material.normalIndex = idx;
 		}
 
-		const std::optional<fastgltf::TextureInfo> &roughnessInfo =
+		const std::optional<fastgltf::TextureInfo> &metallicRoughnessInfo =
 				gltfMaterial.pbrData.metallicRoughnessTexture;
 
-		if (roughnessInfo.has_value()) {
-			fastgltf::Image &gltfImage = pAsset->images[roughnessInfo->textureIndex];
+		if (metallicRoughnessInfo.has_value()) {
+			fastgltf::Image &gltfImage = pAsset->images[metallicRoughnessInfo->textureIndex];
 			Image *pImage = _loadImage(pAsset, gltfImage, path.parent_path());
 
-			// GlTF stores roughness in green channel
-			Image::RoughnessChannel channel = Image::RoughnessChannel::G;
-			std::shared_ptr<Image> roughnessMap(pImage->getRoughnessMap(channel));
-			free(pImage);
+			{
+				// metallic in blue channel
+				std::shared_ptr<Image> metallicMap(pImage->getMetallicMap(Image::Channel::B));
 
-			uint32_t idx = images.size();
-			images.push_back(roughnessMap);
-			material.roughnessIndex = idx;
+				uint32_t idx = images.size();
+				images.push_back(metallicMap);
+
+				material.metallicIndex = idx;
+			}
+
+			{
+				// roughness in green channel
+				std::shared_ptr<Image> roughnessMap(pImage->getRoughnessMap(Image::Channel::G));
+
+				uint32_t idx = images.size();
+				images.push_back(roughnessMap);
+
+				material.roughnessIndex = idx;
+			}
+			free(pImage);
 		}
 
 		materials.push_back(material);

@@ -804,7 +804,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 	// textures
 
 	{
-		std::array<vk::DescriptorSetLayoutBinding, 3> bindings = {
+		std::array<vk::DescriptorSetLayoutBinding, 4> bindings = {
 			vk::DescriptorSetLayoutBinding()
 					.setBinding(0)
 					.setDescriptorCount(1)
@@ -819,7 +819,12 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 					.setBinding(2)
 					.setDescriptorCount(1)
 					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-					.setStageFlags(vk::ShaderStageFlagBits::eFragment)
+					.setStageFlags(vk::ShaderStageFlagBits::eFragment),
+			vk::DescriptorSetLayoutBinding()
+					.setBinding(3)
+					.setDescriptorCount(1)
+					.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+					.setStageFlags(vk::ShaderStageFlagBits::eFragment),
 		};
 
 		vk::DescriptorSetLayoutCreateInfo createInfo = {};

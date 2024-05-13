@@ -31,7 +31,8 @@ layout(set = 1, binding = 1) readonly buffer PointLightBuffer {
 
 layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
 layout(set = 2, binding = 1) uniform sampler2D normalTexture;
-layout(set = 2, binding = 2) uniform sampler2D roughnessTexture;
+layout(set = 2, binding = 2) uniform sampler2D metallicTexture;
+layout(set = 2, binding = 3) uniform sampler2D roughnessTexture;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -45,8 +46,6 @@ layout(location = 0) out vec4 fragColor;
 layout(early_fragment_tests) in;
 
 const float PI = 3.14159265359;
-
-const float metallic = 0.0f;
 
 float saturate(float n) {
 	return clamp(n, 0.0, 1.0);
@@ -98,10 +97,9 @@ vec3 sRGBToLinear(vec3 c) {
 }
 
 void main() {
-	vec3 albedo = texture(albedoTexture, inTexCoord).rgb;
-	albedo = sRGBToLinear(albedo);
-
+	vec3 albedo = sRGBToLinear(texture(albedoTexture, inTexCoord).rgb);
 	vec3 normal = texture(normalTexture, inTexCoord).xyz;
+	float metallic = texture(metallicTexture, inTexCoord).r;
 	float roughness = texture(roughnessTexture, inTexCoord).r;
 
 	// map from [0, 1] to [-1, +1] range

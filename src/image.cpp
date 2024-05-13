@@ -131,7 +131,41 @@ Image *Image::getNormalMap() const {
 	return pNormalMap;
 }
 
-Image *Image::getRoughnessMap(RoughnessChannel channel) const {
+Image *Image::getMetallicMap(Channel channel) const {
+	Format format = Format::R8;
+	size_t pixelCount = _width * _height;
+	uint32_t channels = formatToChannels(format);
+
+	std::vector<uint8_t> newData(pixelCount * channels);
+	Image *pMetallicMap = new Image(_width, _height, format, newData);
+
+	for (size_t offset = 0; offset < pixelCount; offset++) {
+		Color src = _getPixelAtOffset(offset);
+		Color dst;
+
+		// swizzle
+		switch (channel) {
+			case Channel::R:
+				dst.r = src.r;
+				break;
+			case Channel::G:
+				dst.r = src.g;
+				break;
+			case Channel::B:
+				dst.r = src.b;
+				break;
+			case Channel::A:
+				dst.r = src.a;
+				break;
+		}
+
+		pMetallicMap->_setPixelAtOffset(offset, dst);
+	}
+
+	return pMetallicMap;
+}
+
+Image *Image::getRoughnessMap(Channel channel) const {
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
 	uint32_t channels = formatToChannels(format);
@@ -145,16 +179,16 @@ Image *Image::getRoughnessMap(RoughnessChannel channel) const {
 
 		// swizzle
 		switch (channel) {
-			case RoughnessChannel::R:
+			case Channel::R:
 				dst.r = src.r;
 				break;
-			case RoughnessChannel::G:
+			case Channel::G:
 				dst.r = src.g;
 				break;
-			case RoughnessChannel::B:
+			case Channel::B:
 				dst.r = src.b;
 				break;
-			case RoughnessChannel::A:
+			case Channel::A:
 				dst.r = src.a;
 				break;
 		}

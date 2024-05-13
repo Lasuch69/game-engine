@@ -27,6 +27,7 @@ struct Primitive {
 struct Material {
 	std::optional<uint64_t> albedoIndex;
 	std::optional<uint64_t> normalIndex;
+	std::optional<uint64_t> metallicIndex;
 	std::optional<uint64_t> roughnessIndex;
 	std::string name;
 };

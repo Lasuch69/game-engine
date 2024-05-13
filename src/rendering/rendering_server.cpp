@@ -197,7 +197,7 @@ void RS::textureFree(Texture texture) {
 	_pDevice->samplerDestroy(_texture.sampler);
 }
 
-Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
+Material RS::materialCreate(Texture albedo, Texture normal, Texture metallic, Texture roughness) {
 	if (!_textures.has(albedo))
 		albedo = _whiteTexture;
 
@@ -207,6 +207,11 @@ Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
 		normal = _whiteTexture;
 
 	TextureRD _normal = _textures[normal];
+
+	if (!_textures.has(metallic))
+		metallic = _whiteTexture;
+
+	TextureRD _metallic = _textures[metallic];
 
 	if (!_textures.has(roughness))
 		roughness = _whiteTexture;
@@ -223,7 +228,7 @@ Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
 
 	VkDescriptorSet textureSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
 
-	std::array<vk::DescriptorImageInfo, 3> imageInfos = {
+	std::array<vk::DescriptorImageInfo, 4> imageInfos = {
 		vk::DescriptorImageInfo()
 				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
 				.setImageView(_albedo.imageView)
@@ -234,11 +239,15 @@ Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
 				.setSampler(_normal.sampler),
 		vk::DescriptorImageInfo()
 				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+				.setImageView(_metallic.imageView)
+				.setSampler(_metallic.sampler),
+		vk::DescriptorImageInfo()
+				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
 				.setImageView(_roughness.imageView)
 				.setSampler(_roughness.sampler),
 	};
 
-	std::array<vk::WriteDescriptorSet, 3> writeInfos = {
+	std::array<vk::WriteDescriptorSet, 4> writeInfos = {
 		vk::WriteDescriptorSet()
 				.setDstSet(textureSet)
 				.setDstBinding(0)
@@ -260,6 +269,13 @@ Material RS::materialCreate(Texture albedo, Texture normal, Texture roughness) {
 				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
 				.setDescriptorCount(1)
 				.setImageInfo(imageInfos[2]),
+		vk::WriteDescriptorSet()
+				.setDstSet(textureSet)
+				.setDstBinding(3)
+				.setDstArrayElement(0)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setDescriptorCount(1)
+				.setImageInfo(imageInfos[3]),
 	};
 
 	_pDevice->getDevice().updateDescriptorSets(writeInfos, nullptr);

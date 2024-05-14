@@ -17,35 +17,57 @@ struct Vertex {
 	glm::vec2 texCoord;
 
 	static vk::VertexInputBindingDescription getBindingDescription() {
-		return { 0, sizeof(Vertex) };
+		vk::VertexInputBindingDescription bindingDescription;
+		bindingDescription.setBinding(0);
+		bindingDescription.setStride(sizeof(Vertex));
+		bindingDescription.setInputRate(vk::VertexInputRate::eVertex);
+
+		return bindingDescription;
 	}
 
 	static std::array<vk::VertexInputAttributeDescription, 4> getAttributeDescriptions() {
-		return {
-			vk::VertexInputAttributeDescription(
-					0, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, position)),
-			vk::VertexInputAttributeDescription(
-					1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, normal)),
-			vk::VertexInputAttributeDescription(
-					2, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, tangent)),
-			vk::VertexInputAttributeDescription(
-					3, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, texCoord)),
-		};
+		std::array<vk::VertexInputAttributeDescription, 4> attributeDescriptions;
+
+		// Position
+		attributeDescriptions[0].setLocation(0);
+		attributeDescriptions[0].setBinding(0);
+		attributeDescriptions[0].setFormat(vk::Format::eR32G32B32Sfloat);
+		attributeDescriptions[0].setOffset(offsetof(Vertex, position));
+
+		// Normal
+		attributeDescriptions[1].setLocation(1);
+		attributeDescriptions[1].setBinding(0);
+		attributeDescriptions[1].setFormat(vk::Format::eR32G32B32Sfloat);
+		attributeDescriptions[1].setOffset(offsetof(Vertex, normal));
+
+		// Tangent
+		attributeDescriptions[2].setLocation(2);
+		attributeDescriptions[2].setBinding(0);
+		attributeDescriptions[2].setFormat(vk::Format::eR32G32B32Sfloat);
+		attributeDescriptions[2].setOffset(offsetof(Vertex, tangent));
+
+		// TexCoord
+		attributeDescriptions[3].setLocation(3);
+		attributeDescriptions[3].setBinding(0);
+		attributeDescriptions[3].setFormat(vk::Format::eR32G32Sfloat);
+		attributeDescriptions[3].setOffset(offsetof(Vertex, texCoord));
+
+		return attributeDescriptions;
 	}
 
-	bool operator==(const Vertex &other) const {
-		return position == other.position && normal == other.normal && tangent == other.tangent &&
-			   texCoord == other.texCoord;
+	bool operator==(const Vertex &v) const {
+		return position == v.position && normal == v.normal && tangent == v.tangent &&
+			   texCoord == v.texCoord;
 	}
 };
 
 namespace std {
 template <> struct hash<Vertex> {
-	size_t operator()(Vertex const &vertex) const {
-		return ((hash<glm::vec3>()(vertex.position) ^ (hash<glm::vec3>()(vertex.normal) << 1) ^
-						(hash<glm::vec3>()(vertex.tangent) << 1)) >>
+	size_t operator()(Vertex const &v) const {
+		return ((hash<glm::vec3>()(v.position) ^ (hash<glm::vec3>()(v.normal) << 1) ^
+						(hash<glm::vec3>()(v.tangent) << 1)) >>
 					   1) ^
-			   (hash<glm::vec2>()(vertex.texCoord) << 1);
+			   (hash<glm::vec2>()(v.texCoord) << 1);
 	}
 };
 } // namespace std

@@ -8,12 +8,12 @@ layout(push_constant) uniform MeshPushConstants {
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inTangent;
-layout(location = 3) in vec2 inTexCoord;
+layout(location = 3) in vec2 inUV;
 
 layout(location = 0) out vec3 outPosition;
 layout(location = 1) out vec3 outNormal;
 layout(location = 2) out vec3 outTangent;
-layout(location = 3) out vec2 outTexCoord;
+layout(location = 3) out vec2 outUV;
 
 layout(location = 4) out vec3 outBitangent;
 
@@ -32,7 +32,7 @@ void main() {
 	outPosition = vec3(vertPos4) / vertPos4.w;
 	outNormal = N;
 	outTangent = T;
-	outTexCoord = inTexCoord;
+	outUV = inUV;
 
 	outBitangent = B;
 

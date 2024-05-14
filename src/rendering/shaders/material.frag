@@ -37,7 +37,7 @@ layout(set = 2, binding = 3) uniform sampler2D roughnessTexture;
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inTangent;
-layout(location = 3) in vec2 inTexCoord;
+layout(location = 3) in vec2 inUV;
 
 layout(location = 4) in vec3 inBitangent;
 
@@ -97,10 +97,10 @@ vec3 sRGBToLinear(vec3 c) {
 }
 
 void main() {
-	vec3 albedo = sRGBToLinear(texture(albedoTexture, inTexCoord).rgb);
-	vec3 normal = texture(normalTexture, inTexCoord).xyz;
-	float metallic = texture(metallicTexture, inTexCoord).r;
-	float roughness = texture(roughnessTexture, inTexCoord).r;
+	vec3 albedo = sRGBToLinear(texture(albedoTexture, inUV).rgb);
+	vec3 normal = texture(normalTexture, inUV).xyz;
+	float metallic = texture(metallicTexture, inUV).r;
+	float roughness = texture(roughnessTexture, inUV).r;
 
 	// map from [0, 1] to [-1, +1] range
 	normal = normal * 2.0 - vec3(1.0);

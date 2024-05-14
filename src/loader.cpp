@@ -118,9 +118,9 @@ void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex>
 		glm::vec3 pos1 = v1.position;
 		glm::vec3 pos2 = v2.position;
 
-		glm::vec2 uv0 = v0.texCoord;
-		glm::vec2 uv1 = v1.texCoord;
-		glm::vec2 uv2 = v2.texCoord;
+		glm::vec2 uv0 = v0.uv;
+		glm::vec2 uv1 = v1.uv;
+		glm::vec2 uv2 = v2.uv;
 
 		glm::vec3 deltaPos1 = pos1 - pos0;
 		glm::vec3 deltaPos2 = pos2 - pos0;
@@ -175,7 +175,7 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
 		auto &texCoordAccessor = pAsset->accessors[texCoordIter->second];
 		if (texCoordAccessor.bufferViewIndex.has_value()) {
 			fastgltf::iterateAccessorWithIndex<glm::vec2>(*pAsset, texCoordAccessor,
-					[&](glm::vec2 texCoord, size_t idx) { vertices[idx].texCoord = texCoord; });
+					[&](glm::vec2 texCoord, size_t idx) { vertices[idx].uv = texCoord; });
 		}
 
 		std::vector<uint32_t> indices = {};

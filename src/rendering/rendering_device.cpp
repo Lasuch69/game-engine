@@ -350,9 +350,9 @@ void RD::_bufferCopyToImage(
 	_endSingleTimeCommands(commandBuffer);
 }
 
-AllocatedImage RD::imageCreate(uint32_t width, uint32_t height, vk::Format format, uint32_t mipmaps,
-		vk::ImageUsageFlags usage) {
-	return AllocatedImage::create(_allocator, width, height, format, mipmaps, usage);
+AllocatedImage RD::imageCreate(uint32_t width, uint32_t height, vk::Format format,
+		uint32_t mipLevels, vk::ImageUsageFlags usage) {
+	return AllocatedImage::create(_allocator, width, height, format, mipLevels, usage);
 }
 
 void RD::imageDestroy(AllocatedImage image) {

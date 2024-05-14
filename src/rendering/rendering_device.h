@@ -93,8 +93,8 @@ public:
 	void bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size);
 	void bufferDestroy(AllocatedBuffer buffer);
 
-	AllocatedImage imageCreate(uint32_t width, uint32_t height, vk::Format format, uint32_t mipmaps,
-			vk::ImageUsageFlags usage);
+	AllocatedImage imageCreate(uint32_t width, uint32_t height, vk::Format format,
+			uint32_t mipLevels, vk::ImageUsageFlags usage);
 	void imageDestroy(AllocatedImage image);
 
 	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels);

@@ -46,14 +46,14 @@ struct AllocatedImage {
 	vk::Image image;
 
 	static AllocatedImage create(VmaAllocator allocator, uint32_t width, uint32_t height,
-			vk::Format format, uint32_t mipmaps, vk::ImageUsageFlags usage) {
+			vk::Format format, uint32_t mipLevels, vk::ImageUsageFlags usage) {
 		VkImageCreateInfo imageInfo{};
 		imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 		imageInfo.imageType = VK_IMAGE_TYPE_2D;
 		imageInfo.extent.width = width;
 		imageInfo.extent.height = height;
 		imageInfo.extent.depth = 1;
-		imageInfo.mipLevels = mipmaps;
+		imageInfo.mipLevels = mipLevels;
 		imageInfo.arrayLayers = 1;
 		imageInfo.format = static_cast<VkFormat>(format);
 		imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;

@@ -132,4 +132,6 @@ public:
 	RenderingDevice(std::vector<const char *> extensions, bool useValidation);
 };
 
+typedef RenderingDevice RD;
+
 #endif // !RENDERING_DEVICE_H

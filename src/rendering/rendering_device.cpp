@@ -125,7 +125,7 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	return result.value;
 }
 
-vk::CommandBuffer RenderingDevice::_beginSingleTimeCommands() {
+vk::CommandBuffer RD::_beginSingleTimeCommands() {
 	vk::CommandBufferAllocateInfo allocInfo;
 	allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
 	allocInfo.setCommandPool(_pContext->getCommandPool());
@@ -139,7 +139,7 @@ vk::CommandBuffer RenderingDevice::_beginSingleTimeCommands() {
 	return commandBuffer;
 }
 
-void RenderingDevice::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
+void RD::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
 	commandBuffer.end();
 
 	vk::SubmitInfo submitInfo;
@@ -152,7 +152,7 @@ void RenderingDevice::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
 	_pContext->getDevice().freeCommandBuffers(_pContext->getCommandPool(), commandBuffer);
 }
 
-void RenderingDevice::_transitionImageLayout(vk::Image image, vk::Format format, uint32_t mipLevels,
+void RD::_transitionImageLayout(vk::Image image, vk::Format format, uint32_t mipLevels,
 		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
 	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
 
@@ -197,7 +197,7 @@ void RenderingDevice::_transitionImageLayout(vk::Image image, vk::Format format,
 	_endSingleTimeCommands(commandBuffer);
 }
 
-void RenderingDevice::_generateMipmaps(
+void RD::_generateMipmaps(
 		vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels) {
 	vk::FormatProperties properties = _pContext->getPhysicalDevice().getFormatProperties(format);
 
@@ -291,12 +291,12 @@ void RenderingDevice::_generateMipmaps(
 	_endSingleTimeCommands(commandBuffer);
 }
 
-AllocatedBuffer RenderingDevice::bufferCreate(
+AllocatedBuffer RD::bufferCreate(
 		vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo) {
 	return AllocatedBuffer::create(_allocator, usage, size, pAllocInfo);
 }
 
-void RenderingDevice::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
+void RD::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
 	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
 
 	vk::BufferCopy bufferCopy;
@@ -309,7 +309,7 @@ void RenderingDevice::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk:
 	_endSingleTimeCommands(commandBuffer);
 }
 
-void RenderingDevice::bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size) {
+void RD::bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size) {
 	vk::BufferUsageFlagBits usage = vk::BufferUsageFlagBits::eTransferSrc;
 
 	VmaAllocationInfo stagingAllocInfo;
@@ -322,11 +322,11 @@ void RenderingDevice::bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t si
 	vmaDestroyBuffer(_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
 }
 
-void RenderingDevice::bufferDestroy(AllocatedBuffer buffer) {
+void RD::bufferDestroy(AllocatedBuffer buffer) {
 	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
 }
 
-void RenderingDevice::_bufferCopyToImage(
+void RD::_bufferCopyToImage(
 		vk::Buffer srcBuffer, vk::Image dstImage, uint32_t width, uint32_t height) {
 	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
 
@@ -350,17 +350,16 @@ void RenderingDevice::_bufferCopyToImage(
 	_endSingleTimeCommands(commandBuffer);
 }
 
-AllocatedImage RenderingDevice::imageCreate(uint32_t width, uint32_t height, vk::Format format,
-		uint32_t mipmaps, vk::ImageUsageFlags usage) {
+AllocatedImage RD::imageCreate(uint32_t width, uint32_t height, vk::Format format, uint32_t mipmaps,
+		vk::ImageUsageFlags usage) {
 	return AllocatedImage::create(_allocator, width, height, format, mipmaps, usage);
 }
 
-void RenderingDevice::imageDestroy(AllocatedImage image) {
+void RD::imageDestroy(AllocatedImage image) {
 	vmaDestroyImage(_allocator, image.image, image.allocation);
 }
 
-vk::ImageView RenderingDevice::imageViewCreate(
-		vk::Image image, vk::Format format, uint32_t mipLevels) {
+vk::ImageView RD::imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels) {
 	vk::ImageSubresourceRange subresourceRange;
 	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
 	subresourceRange.setBaseMipLevel(0);
@@ -377,12 +376,11 @@ vk::ImageView RenderingDevice::imageViewCreate(
 	return _pContext->getDevice().createImageView(createInfo);
 }
 
-void RenderingDevice::imageViewDestroy(vk::ImageView imageView) {
+void RD::imageViewDestroy(vk::ImageView imageView) {
 	_pContext->getDevice().destroyImageView(imageView);
 }
 
-vk::Sampler RenderingDevice::samplerCreate(
-		vk::Filter filter, uint32_t mipLevels, float mipLodBias) {
+vk::Sampler RD::samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias) {
 	vk::PhysicalDeviceProperties properties = _pContext->getPhysicalDevice().getProperties();
 	float maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
@@ -409,11 +407,11 @@ vk::Sampler RenderingDevice::samplerCreate(
 	return _pContext->getDevice().createSampler(createInfo);
 }
 
-void RenderingDevice::samplerDestroy(vk::Sampler sampler) {
+void RD::samplerDestroy(vk::Sampler sampler) {
 	_pContext->getDevice().destroySampler(sampler);
 }
 
-TextureRD RenderingDevice::textureCreate(std::shared_ptr<Image> image) {
+TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 	uint32_t width = image->getWidth();
 	uint32_t height = image->getHeight();
 
@@ -470,7 +468,7 @@ TextureRD RenderingDevice::textureCreate(std::shared_ptr<Image> image) {
 	};
 }
 
-void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition) {
+void RD::updateUniformBuffer(const glm::vec3 &viewPosition) {
 	UniformBufferObject ubo{};
 	ubo.viewPosition = viewPosition;
 	ubo.directionalLightCount = _lightStorage.getDirectionalLightCount();
@@ -479,47 +477,47 @@ void RenderingDevice::updateUniformBuffer(const glm::vec3 &viewPosition) {
 	memcpy(_uniformAllocInfos[_frame].pMappedData, &ubo, sizeof(ubo));
 }
 
-LightStorage &RenderingDevice::getLightStorage() {
+LightStorage &RD::getLightStorage() {
 	return _lightStorage;
 }
 
-vk::Instance RenderingDevice::getInstance() const {
+vk::Instance RD::getInstance() const {
 	return _pContext->getInstance();
 }
 
-vk::Device RenderingDevice::getDevice() const {
+vk::Device RD::getDevice() const {
 	return _pContext->getDevice();
 }
 
-vk::PipelineLayout RenderingDevice::getDepthPipelineLayout() const {
+vk::PipelineLayout RD::getDepthPipelineLayout() const {
 	return _depthLayout;
 }
 
-vk::Pipeline RenderingDevice::getDepthPipeline() const {
+vk::Pipeline RD::getDepthPipeline() const {
 	return _depthPipeline;
 }
 
-vk::PipelineLayout RenderingDevice::getMaterialPipelineLayout() const {
+vk::PipelineLayout RD::getMaterialPipelineLayout() const {
 	return _materialLayout;
 }
 
-vk::Pipeline RenderingDevice::getMaterialPipeline() const {
+vk::Pipeline RD::getMaterialPipeline() const {
 	return _materialPipeline;
 }
 
-std::array<vk::DescriptorSet, 2> RenderingDevice::getMaterialSets() const {
+std::array<vk::DescriptorSet, 2> RD::getMaterialSets() const {
 	return { _uniformSets[_frame], _lightStorage.getLightSet() };
 }
 
-vk::DescriptorPool RenderingDevice::getDescriptorPool() const {
+vk::DescriptorPool RD::getDescriptorPool() const {
 	return _descriptorPool;
 }
 
-vk::DescriptorSetLayout RenderingDevice::getTextureLayout() const {
+vk::DescriptorSetLayout RD::getTextureLayout() const {
 	return _textureLayout;
 }
 
-vk::CommandBuffer RenderingDevice::drawBegin() {
+vk::CommandBuffer RD::drawBegin() {
 	vk::CommandBuffer commandBuffer = _commandBuffers[_frame];
 
 	vk::Result result = _pContext->getDevice().waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
@@ -588,7 +586,7 @@ vk::CommandBuffer RenderingDevice::drawBegin() {
 	return commandBuffer;
 }
 
-void RenderingDevice::drawEnd(vk::CommandBuffer commandBuffer) {
+void RD::drawEnd(vk::CommandBuffer commandBuffer) {
 	if (!_imageIndex.has_value()) {
 		throw std::runtime_error("Called drawEnd(), without calling drawBegin() first!");
 	}
@@ -642,7 +640,7 @@ void RenderingDevice::drawEnd(vk::CommandBuffer commandBuffer) {
 	_frame = (_frame + 1) % FRAMES_IN_FLIGHT;
 }
 
-void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
+void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_pContext->initialize(surface, width, height);
 
 	// allocator
@@ -921,7 +919,7 @@ void RenderingDevice::init(vk::SurfaceKHR surface, uint32_t width, uint32_t heig
 	}
 }
 
-void RenderingDevice::windowResize(uint32_t width, uint32_t height) {
+void RD::windowResize(uint32_t width, uint32_t height) {
 	if (_width == width && _height == height) {
 		return;
 	}
@@ -931,6 +929,6 @@ void RenderingDevice::windowResize(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-RenderingDevice::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {
+RD::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {
 	_pContext = new VulkanContext(extensions, useValidation);
 }

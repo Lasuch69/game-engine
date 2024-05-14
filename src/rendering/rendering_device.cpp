@@ -4,6 +4,9 @@
 #include <memory>
 #include <stdexcept>
 
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+
 #include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"
 #include "shaders/tonemap.gen.h"
@@ -608,6 +611,7 @@ void RD::drawEnd(vk::CommandBuffer commandBuffer) {
 	commandBuffer.draw(3, 1, 0, 0);
 
 	// ImGui
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
 	commandBuffer.endRenderPass();
 	commandBuffer.end();
@@ -932,6 +936,38 @@ void RD::windowResize(uint32_t width, uint32_t height) {
 	_width = width;
 	_height = height;
 	_resized = true;
+}
+
+// ImGui error check
+static void vkCheckResult(VkResult err) {
+	if (err == 0)
+		return;
+
+	fprintf(stderr, "ERROR: %d\n", err);
+
+	if (err < 0)
+		abort();
+}
+
+void RD::initImGui() {
+	ImGui_ImplVulkan_InitInfo initInfo;
+	initInfo.Instance = _pContext->getInstance();
+	initInfo.PhysicalDevice = _pContext->getPhysicalDevice();
+	initInfo.Device = _pContext->getDevice();
+	initInfo.QueueFamily = _pContext->getGraphicsQueueFamily();
+	initInfo.Queue = _pContext->getGraphicsQueue();
+	initInfo.PipelineCache = nullptr;
+	initInfo.DescriptorPool = _descriptorPool;
+	initInfo.RenderPass = _pContext->getRenderPass();
+	initInfo.Subpass = TONEMAP_PASS;
+	initInfo.MinImageCount = FRAMES_IN_FLIGHT;
+	initInfo.ImageCount = FRAMES_IN_FLIGHT;
+	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	initInfo.Allocator = nullptr;
+	initInfo.CheckVkResultFn = vkCheckResult;
+
+	ImGui_ImplVulkan_Init(&initInfo);
+	ImGui_ImplVulkan_CreateFontsTexture();
 }
 
 RD::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {

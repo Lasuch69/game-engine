@@ -130,6 +130,8 @@ public:
 	void init(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
 	void windowResize(uint32_t width, uint32_t height);
 
+	void initImGui();
+
 	RenderingDevice(std::vector<const char *> extensions, bool useValidation);
 };
 

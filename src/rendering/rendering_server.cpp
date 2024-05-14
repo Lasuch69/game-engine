@@ -384,6 +384,10 @@ std::vector<const char *> getRequiredExtensions() {
 	return extensions;
 }
 
+void RS::initImGui() {
+	_pDevice->initImGui();
+}
+
 void RS::initialize(int argc, char **argv) {
 	bool useValidation = false;
 

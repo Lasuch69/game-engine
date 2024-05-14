@@ -536,6 +536,8 @@ void VulkanContext::initialize(vk::SurfaceKHR surface, uint32_t width, uint32_t 
 	_graphicsQueue = _device.getQueue(indices.graphicsFamily, 0);
 	_presentQueue = _device.getQueue(indices.presentFamily, 0);
 
+	_graphicsQueueFamily = indices.graphicsFamily;
+
 	_createSwapchain(width, height);
 
 	vk::CommandPoolCreateInfo createInfo = {};
@@ -576,6 +578,10 @@ vk::Queue VulkanContext::getGraphicsQueue() const {
 
 vk::Queue VulkanContext::getPresentQueue() const {
 	return _presentQueue;
+}
+
+uint32_t VulkanContext::getGraphicsQueueFamily() const {
+	return _graphicsQueueFamily;
 }
 
 vk::SwapchainKHR VulkanContext::getSwapchain() const {

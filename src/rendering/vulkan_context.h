@@ -29,6 +29,8 @@ private:
 	vk::Queue _graphicsQueue;
 	vk::Queue _presentQueue;
 
+	uint32_t _graphicsQueueFamily;
+
 	typedef struct {
 		vk::ImageView view;
 		vk::Framebuffer framebuffer;
@@ -61,6 +63,8 @@ public:
 
 	vk::Queue getGraphicsQueue() const;
 	vk::Queue getPresentQueue() const;
+
+	uint32_t getGraphicsQueueFamily() const;
 
 	vk::SwapchainKHR getSwapchain() const;
 	vk::Extent2D getSwapchainExtent() const;

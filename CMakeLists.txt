@@ -17,23 +17,46 @@ set(LIBRARIES "SDL2;Vulkan::Vulkan")
 # compile shaders
 execute_process(COMMAND python3 shader_gen.py)
 
-set(FASTGLTF_SRC thirdparty/fastgltf/src)
-set(FASTGLTF_DEPS thirdparty/fastgltf/deps)
+# fastgltf
 
-include_directories(thirdparty/fastgltf/include)
+set(FASTGLTF_DIR thirdparty/fastgltf)
 
-add_library(fastgltf ${FASTGLTF_SRC}/fastgltf.cpp ${FASTGLTF_SRC}/base64.cpp ${FASTGLTF_DEPS}/simdjson/simdjson.cpp)
-target_include_directories(fastgltf PRIVATE ${FASTGLTF_DEPS}/simdjson)
+add_library(fastgltf
+	${FASTGLTF_DIR}/src/fastgltf.cpp
+	${FASTGLTF_DIR}/src/base64.cpp
+	${FASTGLTF_DIR}/deps/simdjson/simdjson.cpp
+)
+target_include_directories(fastgltf PRIVATE ${FASTGLTF_DIR}/deps/simdjson ${FASTGLTF_DIR}/include)
 target_compile_options(fastgltf PRIVATE -O3)
 
-include_directories(include thirdparty/stb thirdparty/vma thirdparty/fastgltf/include)
+# ImGui
+
+set(IMGUI_DIR thirdparty/imgui)
+
+add_library(imgui
+	${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+	${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+	${IMGUI_DIR}/imgui.cpp
+	${IMGUI_DIR}/imgui_demo.cpp
+	${IMGUI_DIR}/imgui_draw.cpp
+	${IMGUI_DIR}/imgui_tables.cpp
+	${IMGUI_DIR}/imgui_widgets.cpp
+)
+target_include_directories(imgui PRIVATE ${IMGUI_DIR})
+target_compile_options(imgui PRIVATE -O3)
+
+# Hayaku
 
 file(GLOB_RECURSE SOURCE src/*.cpp)
 
-set(THIRDPARTY_INCLUDE thirdparty/stb/include thirdparty/vma/include thirdparty/fastgltf/include)
-
 add_executable(hayaku ${SOURCE} thirdparty/stb/stb_image.cpp thirdparty/vma/vk_mem_alloc.cpp)
-target_include_directories(hayaku PRIVATE include ${THIRDPARTY_INCLUDE})
+target_include_directories(hayaku PRIVATE
+	include
+	thirdparty/stb/include
+	thirdparty/vma/include
+	thirdparty/fastgltf/include
+	thirdparty/imgui
+	thirdparty/imgui/backends
+)
 target_compile_options(hayaku PRIVATE -Wall -O2)
-
-target_link_libraries(hayaku ${LIBRARIES} fastgltf)
+target_link_libraries(hayaku ${LIBRARIES} fastgltf imgui)

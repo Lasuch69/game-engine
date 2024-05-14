@@ -186,15 +186,12 @@ Texture RS::textureCreate(const std::shared_ptr<Image> image) {
 }
 
 void RS::textureFree(Texture texture) {
-	std::optional<TextureRD> result = _textures.remove(texture);
+	std::optional<TextureRD> _texture = _textures.remove(texture);
 
-	if (!result.has_value())
+	if (!_texture.has_value())
 		return;
 
-	TextureRD _texture = result.value();
-	_pDevice->imageDestroy(_texture.image);
-	_pDevice->imageViewDestroy(_texture.imageView);
-	_pDevice->samplerDestroy(_texture.sampler);
+	_pDevice->textureDestroy(_texture.value());
 }
 
 Material RS::materialCreate(Texture albedo, Texture normal, Texture metallic, Texture roughness) {

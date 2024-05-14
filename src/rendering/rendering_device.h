@@ -104,6 +104,7 @@ public:
 	void samplerDestroy(vk::Sampler sampler);
 
 	TextureRD textureCreate(const std::shared_ptr<Image> image);
+	void textureDestroy(TextureRD texture);
 
 	void updateUniformBuffer(const glm::vec3 &viewPosition);
 

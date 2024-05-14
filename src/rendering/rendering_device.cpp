@@ -13,6 +13,23 @@
 
 #include "rendering_device.h"
 
+static vk::Format getVkFormat(Image::Format format) {
+	switch (format) {
+		case Image::Format::R8:
+		case Image::Format::L8:
+			return vk::Format::eR8Unorm;
+		case Image::Format::RG8:
+		case Image::Format::LA8:
+			return vk::Format::eR8G8Unorm;
+		case Image::Format::RGB8:
+			return vk::Format::eR8G8B8Unorm;
+		case Image::Format::RGBA8:
+			return vk::Format::eR8G8B8A8Unorm;
+		default:
+			return vk::Format::eUndefined;
+	}
+}
+
 vk::ShaderModule createShaderModule(vk::Device device, const uint32_t *pCode, size_t size) {
 	vk::ShaderModuleCreateInfo createInfo;
 	createInfo.setPCode(pCode);
@@ -415,26 +432,8 @@ TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 	uint32_t width = image->getWidth();
 	uint32_t height = image->getHeight();
 
+	vk::Format format = getVkFormat(image->getFormat());
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
-
-	vk::Format format = vk::Format::eUndefined;
-
-	switch (image->getFormat()) {
-		case Image::Format::R8:
-		case Image::Format::L8:
-			format = vk::Format::eR8Unorm;
-			break;
-		case Image::Format::RG8:
-		case Image::Format::LA8:
-			format = vk::Format::eR8G8Unorm;
-			break;
-		case Image::Format::RGB8:
-			format = vk::Format::eR8G8B8Unorm;
-			break;
-		case Image::Format::RGBA8:
-			format = vk::Format::eR8G8B8A8Unorm;
-			break;
-	}
 
 	AllocatedImage allocatedImage = imageCreate(width, height, format, mipLevels,
 			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
@@ -466,6 +465,12 @@ TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 		imageView,
 		sampler,
 	};
+}
+
+void RD::textureDestroy(TextureRD texture) {
+	imageDestroy(texture.image);
+	imageViewDestroy(texture.imageView);
+	samplerDestroy(texture.sampler);
 }
 
 void RD::updateUniformBuffer(const glm::vec3 &viewPosition) {

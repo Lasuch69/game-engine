@@ -26,8 +26,6 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 SDL_Window *windowInitialize(int argc, char *argv[]) {
-	SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
-	SDL_Init(SDL_INIT_VIDEO);
 	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 
@@ -51,6 +49,11 @@ SDL_Window *windowInitialize(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
 	printf("Hayaku Engine -- Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 	printf("Author: Lasuch69 2024\n\n");
+
+	SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
+
+	SDL_Init(SDL_INIT_VIDEO);
+	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_INFO);
 
 	SDL_Window *pWindow = windowInitialize(argc, argv);
 	if (pWindow == nullptr) {

@@ -21,7 +21,7 @@ private:
 			}
 		}
 
-		throw std::runtime_error("Failed to find suitable memory type!");
+		throw std::runtime_error("Could not find suitable memory type!");
 	}
 
 	static vk::Image _createImage(vk::Device device, uint32_t width, uint32_t height,
@@ -53,7 +53,7 @@ private:
 		vk::Result err = device.allocateMemory(&allocInfo, nullptr, pMemory);
 
 		if (err != vk::Result::eSuccess)
-			throw std::runtime_error("Failed to allocate image memory!");
+			throw std::runtime_error("Attachment image memory allocation failed!");
 
 		device.bindImageMemory(image, *pMemory, 0);
 		return image;

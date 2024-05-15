@@ -1,7 +1,8 @@
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <vector>
+
+#include <SDL2/SDL_log.h>
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/glm_element_traits.hpp>
@@ -214,7 +215,9 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 			fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
 
 	if (fastgltf::Error err = result.error(); err != fastgltf::Error::None) {
-		std::cout << "Failed to load GlTF: " << fastgltf::getErrorMessage(err) << std::endl;
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Asset loading failed: %s",
+				fastgltf::getErrorMessage(err).data());
+
 		return {};
 	}
 

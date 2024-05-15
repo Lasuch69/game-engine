@@ -1,12 +1,12 @@
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <iostream>
 #include <set>
 #include <stdexcept>
 #include <string>
 
 #include <version.h>
+
+#include <SDL2/SDL_log.h>
 
 #include "vulkan_context.h"
 
@@ -54,7 +54,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		return VK_FALSE;
 	}
 
-	std::cout << pCallbackData->pMessage << std::endl;
+	SDL_LogCritical(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
 	return VK_FALSE;
 }
 
@@ -106,7 +106,7 @@ vk::Instance createInstance(std::vector<const char *> extensions, bool useValida
 				CreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, nullptr, pDebugMessenger);
 
 		if (err != VK_SUCCESS)
-			std::cout << "Validation setup failed!" << std::endl;
+			SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Validation setup failed!");
 	}
 
 	return instance;
@@ -504,7 +504,7 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 		vk::Result err = _device.createFramebuffer(&framebufferInfo, nullptr, &framebuffer);
 
 		if (err != vk::Result::eSuccess)
-			throw std::runtime_error("Failed to create framebuffer!");
+			throw std::runtime_error("Swapchain framebuffer creation failed!");
 
 		_swapchainImages[i] = { finalColorView, framebuffer };
 	}
@@ -610,7 +610,7 @@ vk::CommandPool VulkanContext::getCommandPool() const {
 
 VulkanContext::VulkanContext(std::vector<const char *> extensions, bool validation) {
 	if (validation && !checkValidationLayerSupport()) {
-		std::cout << "Validation not supported!" << std::endl;
+		SDL_LogWarn(SDL_LOG_PRIORITY_WARN, "Validation not supported!");
 		validation = false;
 	}
 

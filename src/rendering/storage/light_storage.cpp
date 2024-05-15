@@ -103,7 +103,7 @@ void LightStorage::initialize(
 	vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_lightSetLayout);
 
 	if (err != vk::Result::eSuccess)
-		throw std::runtime_error("Failed to create light set layout!");
+		throw std::runtime_error("Light descriptor set layout creation failed!");
 
 	vk::DescriptorSetAllocateInfo allocInfo = {};
 	allocInfo.setDescriptorPool(descriptorPool);
@@ -113,7 +113,7 @@ void LightStorage::initialize(
 	err = device.allocateDescriptorSets(&allocInfo, &_lightSet);
 
 	if (err != vk::Result::eSuccess)
-		throw std::runtime_error("Failed to allocate light set!");
+		throw std::runtime_error("Light descriptor set allocation failed!");
 
 	vk::BufferUsageFlags usage =
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst;

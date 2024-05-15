@@ -1,11 +1,12 @@
 #include <cassert>
 #include <cstdint>
-#include <cstdio>
 #include <memory>
 #include <stdexcept>
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+
+#include <SDL2/SDL_log.h>
 
 #include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"
@@ -140,7 +141,7 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	vk::ResultValue<vk::Pipeline> result = device.createGraphicsPipeline(nullptr, createInfo);
 
 	if (result.result != vk::Result::eSuccess)
-		printf("Failed to create pipeline!\n");
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Graphics pipeline creation failed!");
 
 	return result.value;
 }
@@ -530,9 +531,8 @@ vk::CommandBuffer RD::drawBegin() {
 
 	vk::Result result = _pContext->getDevice().waitForFences(_fences[_frame], VK_TRUE, UINT64_MAX);
 
-	if (result != vk::Result::eSuccess) {
-		printf("Device failed to wait for fences!\n");
-	}
+	if (result != vk::Result::eSuccess)
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Waiting for fences failed!");
 
 	vk::ResultValue<uint32_t> image = _pContext->getDevice().acquireNextImageKHR(
 			_pContext->getSwapchain(), UINT64_MAX, _presentSemaphores[_frame], VK_NULL_HANDLE);
@@ -544,7 +544,7 @@ vk::CommandBuffer RD::drawBegin() {
 		updateInputAttachment(_pContext->getDevice(),
 				_pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
 	} else if (image.result != vk::Result::eSuccess && image.result != vk::Result::eSuboptimalKHR) {
-		printf("Failed to acquire swapchain image!");
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Swapchain image acquire failed!");
 	}
 
 	_pContext->getDevice().resetFences(_fences[_frame]);
@@ -595,9 +595,8 @@ vk::CommandBuffer RD::drawBegin() {
 }
 
 void RD::drawEnd(vk::CommandBuffer commandBuffer) {
-	if (!_imageIndex.has_value()) {
-		throw std::runtime_error("Called drawEnd(), without calling drawBegin() first!");
-	}
+	bool isDrawStarted = _imageIndex.has_value();
+	assert(isDrawStarted);
 
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 
@@ -642,7 +641,7 @@ void RD::drawEnd(vk::CommandBuffer commandBuffer) {
 
 		_resized = false;
 	} else if (err != vk::Result::eSuccess) {
-		printf("Failed to present swapchain image!\n");
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "Swapchain image presentation failed!");
 	}
 
 	_imageIndex.reset();
@@ -664,7 +663,7 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		VkResult err = vmaCreateAllocator(&allocatorCreateInfo, &_allocator);
 
 		if (err != VK_SUCCESS)
-			printf("Failed to create allocator!\n");
+			throw std::runtime_error("VmaAllocator creation failed!");
 	}
 
 	// commands
@@ -680,7 +679,7 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		vk::Result err = device.allocateCommandBuffers(&allocInfo, _commandBuffers);
 
 		if (err != vk::Result::eSuccess)
-			printf("Failed to allocate command buffers!\n");
+			throw std::runtime_error("Command buffers allocation failed!");
 	}
 
 	// sync
@@ -732,9 +731,8 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_uniformLayout);
 
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to create uniform layout!\n");
-		}
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("UBO descriptor set layout creation failed!");
 
 		std::vector<vk::DescriptorSetLayout> layouts(FRAMES_IN_FLIGHT, _uniformLayout);
 
@@ -747,9 +745,8 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		err = device.allocateDescriptorSets(&allocInfo, uniformSets.data());
 
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to allocate uniform set!\n");
-		}
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("UBO descriptor set allocation failed!");
 
 		for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
 			_uniformBuffers[i] = bufferCreate(
@@ -787,9 +784,8 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		vk::Result err =
 				device.createDescriptorSetLayout(&createInfo, nullptr, &_inputAttachmentLayout);
 
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to create image attachment layout!\n");
-		}
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Input attachment descriptor set layout creation failed!");
 
 		vk::DescriptorSetAllocateInfo allocInfo;
 		allocInfo.setDescriptorPool(_descriptorPool);
@@ -798,9 +794,8 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		err = device.allocateDescriptorSets(&allocInfo, &_inputAttachmentSet);
 
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to allocate input attachment set!\n");
-		}
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Input attachment descriptor set allocation failed!");
 
 		updateInputAttachment(
 				device, _pContext->getColorAttachment().getImageView(), _inputAttachmentSet);
@@ -836,9 +831,8 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_textureLayout);
 
-		if (err != vk::Result::eSuccess) {
-			printf("Failed to create texture layout!\n");
-		}
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Texture descriptor set layout creation failed!");
 	}
 
 	vk::PushConstantRange pushConstant;

@@ -6,6 +6,7 @@
 #include <SDL2/SDL_vulkan.h>
 
 #include <glm/glm.hpp>
+#include <stdexcept>
 
 #include "rendering_device.h"
 #include "rendering_server.h"
@@ -282,6 +283,40 @@ Material RS::materialCreate(Texture albedo, Texture normal, Texture metallic, Te
 
 void RS::materialFree(Material material) {
 	_materials.remove(material);
+}
+
+void RS::MSAASamplesSet(MSAA samples) {
+	switch (samples) {
+		case MSAA_X1:
+			_pDevice->setMSAASamples(vk::SampleCountFlagBits::e1);
+			break;
+		case MSAA_X2:
+			_pDevice->setMSAASamples(vk::SampleCountFlagBits::e2);
+			break;
+		case MSAA_X4:
+			_pDevice->setMSAASamples(vk::SampleCountFlagBits::e4);
+			break;
+		case MSAA_X8:
+			_pDevice->setMSAASamples(vk::SampleCountFlagBits::e8);
+			break;
+	}
+}
+
+MSAA RS::MSAASamplesGet() const {
+	vk::SampleCountFlagBits samples = _pDevice->getMSAASamples();
+
+	switch (samples) {
+		case vk::SampleCountFlagBits::e1:
+			return MSAA_X1;
+		case vk::SampleCountFlagBits::e2:
+			return MSAA_X2;
+		case vk::SampleCountFlagBits::e4:
+			return MSAA_X4;
+		case vk::SampleCountFlagBits::e8:
+			return MSAA_X8;
+		default:
+			throw std::runtime_error("Device returned invalid sample count!");
+	}
 }
 
 void RenderingServer::draw() {

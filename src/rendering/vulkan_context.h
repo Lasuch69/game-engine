@@ -2,6 +2,7 @@
 #define VULKAN_CONTEXT_H
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <vulkan/vulkan.hpp>
@@ -31,6 +32,8 @@ private:
 
 	uint32_t _graphicsQueueFamily;
 
+	vk::SampleCountFlagBits _msaaSamples = vk::SampleCountFlagBits::e1;
+
 	typedef struct {
 		vk::ImageView view;
 		vk::Framebuffer framebuffer;
@@ -41,6 +44,9 @@ private:
 	vk::Extent2D _swapchainExtent;
 	vk::RenderPass _renderPass;
 
+	// Color resolve for MSAA
+	std::optional<Attachment> _resolve;
+
 	Attachment _color;
 	Attachment _depth;
 
@@ -49,6 +55,10 @@ private:
 	bool _initialized = false;
 
 	void _createSwapchain(uint32_t width, uint32_t height);
+
+	void _renderPassCreate(vk::Format format, std::vector<vk::Image> swapchainImages);
+	void _renderPassMSAACreate(vk::Format format, std::vector<vk::Image> swapchainImages);
+
 	void _destroySwapchain();
 
 public:
@@ -65,6 +75,9 @@ public:
 	vk::Queue getPresentQueue() const;
 
 	uint32_t getGraphicsQueueFamily() const;
+
+	void setMSAASamples(vk::SampleCountFlagBits samples);
+	vk::SampleCountFlagBits getMSAASamples() const;
 
 	vk::SwapchainKHR getSwapchain() const;
 	vk::Extent2D getSwapchainExtent() const;

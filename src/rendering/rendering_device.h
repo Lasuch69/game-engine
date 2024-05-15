@@ -86,6 +86,9 @@ private:
 	void _generateMipmaps(
 			vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels);
 
+	void _createPipelines();
+	void _destroyPipelines();
+
 public:
 	AllocatedBuffer bufferCreate(
 			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
@@ -123,6 +126,9 @@ public:
 
 	vk::DescriptorPool getDescriptorPool() const;
 	vk::DescriptorSetLayout getTextureLayout() const;
+
+	void setMSAASamples(vk::SampleCountFlagBits samples);
+	vk::SampleCountFlagBits getMSAASamples() const;
 
 	vk::CommandBuffer drawBegin();
 	void drawEnd(vk::CommandBuffer commandBuffer);

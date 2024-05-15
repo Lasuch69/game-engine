@@ -25,7 +25,7 @@ private:
 	}
 
 	static vk::Image _createImage(vk::Device device, uint32_t width, uint32_t height,
-			vk::Format format, vk::ImageUsageFlags usage,
+			vk::Format format, vk::ImageUsageFlags usage, vk::SampleCountFlagBits samples,
 			vk::PhysicalDeviceMemoryProperties memProperties, vk::DeviceMemory *pMemory) {
 		vk::ImageCreateInfo createInfo = {};
 		createInfo.setImageType(vk::ImageType::e2D);
@@ -36,7 +36,7 @@ private:
 		createInfo.setTiling(vk::ImageTiling::eOptimal);
 		createInfo.setInitialLayout(vk::ImageLayout::eUndefined);
 		createInfo.setUsage(usage);
-		createInfo.setSamples(vk::SampleCountFlagBits::e1);
+		createInfo.setSamples(samples);
 		createInfo.setSharingMode(vk::SharingMode::eExclusive);
 
 		vk::Image image = device.createImage(createInfo);
@@ -60,7 +60,7 @@ private:
 	}
 
 	static vk::ImageView _createView(vk::Device device, vk::Image image, vk::Format format,
-			vk::ImageAspectFlagBits aspectFlags) {
+			vk::ImageAspectFlags aspectFlags) {
 		vk::ImageSubresourceRange subresourceRange = {};
 		subresourceRange.setAspectMask(aspectFlags);
 		subresourceRange.setBaseMipLevel(0);
@@ -79,11 +79,11 @@ private:
 
 public:
 	static Attachment create(vk::Device device, uint32_t width, uint32_t height, vk::Format format,
-			vk::ImageUsageFlags usage, vk::ImageAspectFlagBits aspectFlags,
-			vk::PhysicalDeviceMemoryProperties memProperties) {
+			vk::ImageUsageFlags usage, vk::SampleCountFlagBits samples,
+			vk::ImageAspectFlags aspectFlags, vk::PhysicalDeviceMemoryProperties memProperties) {
 		vk::DeviceMemory memory;
 		vk::Image image =
-				_createImage(device, width, height, format, usage, memProperties, &memory);
+				_createImage(device, width, height, format, usage, samples, memProperties, &memory);
 		vk::ImageView view = _createView(device, image, format, aspectFlags);
 
 		return Attachment(image, view, memory, format);

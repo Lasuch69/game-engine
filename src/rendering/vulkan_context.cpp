@@ -341,27 +341,31 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 	std::vector<vk::Image> images = _device.getSwapchainImagesKHR(_swapchain);
 	_swapchainImages.resize(images.size());
 
-	// Resources
+	if (_msaaSamples == vk::SampleCountFlagBits::e1) {
+		_renderPassCreate(surfaceFormat.format, images);
+	} else {
+		_renderPassMSAACreate(surfaceFormat.format, images);
+	}
+}
 
-	uint32_t _width = _swapchainExtent.width;
-	uint32_t _height = _swapchainExtent.height;
+void VulkanContext::_renderPassCreate(vk::Format format, std::vector<vk::Image> swapchainImages) {
+	uint32_t width = _swapchainExtent.width;
+	uint32_t height = _swapchainExtent.height;
 
 	vk::PhysicalDeviceMemoryProperties memProperties = _physicalDevice.getMemoryProperties();
 
-	vk::Format colorFormat = vk::Format::eB10G11R11UfloatPack32;
-	_color = Attachment::create(_device, _width, _height, colorFormat,
+	_color = Attachment::create(_device, width, height, vk::Format::eB10G11R11UfloatPack32,
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
-			vk::ImageAspectFlagBits::eColor, memProperties);
+			vk::SampleCountFlagBits::e1, vk::ImageAspectFlagBits::eColor, memProperties);
 
-	vk::Format depthFormat = vk::Format::eD32Sfloat;
-	_depth = Attachment::create(_device, _width, _height, depthFormat,
-			vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::ImageAspectFlagBits::eDepth,
-			memProperties);
+	_depth = Attachment::create(_device, width, height, vk::Format::eD32Sfloat,
+			vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::SampleCountFlagBits::e1,
+			vk::ImageAspectFlagBits::eDepth, memProperties);
 
 	// attachments
 
 	vk::AttachmentDescription finalColorAttachment = {};
-	finalColorAttachment.setFormat(surfaceFormat.format);
+	finalColorAttachment.setFormat(format);
 	finalColorAttachment.setSamples(vk::SampleCountFlagBits::e1);
 	finalColorAttachment.setLoadOp(vk::AttachmentLoadOp::eDontCare);
 	finalColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -371,7 +375,7 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 	finalColorAttachment.setFinalLayout(vk::ImageLayout::ePresentSrcKHR);
 
 	vk::AttachmentDescription colorAttachment = {};
-	colorAttachment.setFormat(colorFormat);
+	colorAttachment.setFormat(_color.getFormat());
 	colorAttachment.setSamples(vk::SampleCountFlagBits::e1);
 	colorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
 	colorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -381,7 +385,7 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 	colorAttachment.setFinalLayout(vk::ImageLayout::eColorAttachmentOptimal);
 
 	vk::AttachmentDescription depthAttachment = {};
-	depthAttachment.setFormat(depthFormat);
+	depthAttachment.setFormat(_depth.getFormat());
 	depthAttachment.setSamples(vk::SampleCountFlagBits::e1);
 	depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
 	depthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -478,11 +482,11 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 	subresourceRange.setBaseArrayLayer(0);
 	subresourceRange.setLayerCount(1);
 
-	for (size_t i = 0; i < images.size(); i++) {
+	for (size_t i = 0; i < swapchainImages.size(); i++) {
 		vk::ImageViewCreateInfo createInfo = {};
-		createInfo.setImage(images[i]);
+		createInfo.setImage(swapchainImages[i]);
 		createInfo.setViewType(vk::ImageViewType::e2D);
-		createInfo.setFormat(surfaceFormat.format);
+		createInfo.setFormat(format);
 		createInfo.setSubresourceRange(subresourceRange);
 
 		vk::ImageView finalColorView = _device.createImageView(createInfo);
@@ -496,8 +500,196 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 		vk::FramebufferCreateInfo framebufferInfo = {};
 		framebufferInfo.setRenderPass(_renderPass);
 		framebufferInfo.setAttachments(attachmentViews);
-		framebufferInfo.setWidth(_swapchainExtent.width);
-		framebufferInfo.setHeight(_swapchainExtent.height);
+		framebufferInfo.setWidth(width);
+		framebufferInfo.setHeight(height);
+		framebufferInfo.setLayers(1);
+
+		vk::Framebuffer framebuffer;
+		vk::Result err = _device.createFramebuffer(&framebufferInfo, nullptr, &framebuffer);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Failed to create framebuffer!");
+
+		_swapchainImages[i] = { finalColorView, framebuffer };
+	}
+}
+
+void VulkanContext::_renderPassMSAACreate(
+		vk::Format format, std::vector<vk::Image> swapchainImages) {
+	uint32_t width = _swapchainExtent.width;
+	uint32_t height = _swapchainExtent.height;
+
+	vk::PhysicalDeviceMemoryProperties memProperties = _physicalDevice.getMemoryProperties();
+
+	_resolve = Attachment::create(_device, width, height, vk::Format::eB10G11R11UfloatPack32,
+			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
+			vk::SampleCountFlagBits::e1, vk::ImageAspectFlagBits::eColor, memProperties);
+
+	_color = Attachment::create(_device, width, height, vk::Format::eB10G11R11UfloatPack32,
+			vk::ImageUsageFlagBits::eColorAttachment, _msaaSamples, vk::ImageAspectFlagBits::eColor,
+			memProperties);
+
+	_depth = Attachment::create(_device, width, height, vk::Format::eD32Sfloat,
+			vk::ImageUsageFlagBits::eDepthStencilAttachment, _msaaSamples,
+			vk::ImageAspectFlagBits::eDepth, memProperties);
+
+	// attachments
+
+	vk::AttachmentDescription finalColorAttachment = {};
+	finalColorAttachment.setFormat(format);
+	finalColorAttachment.setSamples(vk::SampleCountFlagBits::e1);
+	finalColorAttachment.setLoadOp(vk::AttachmentLoadOp::eDontCare);
+	finalColorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+	finalColorAttachment.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare);
+	finalColorAttachment.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
+	finalColorAttachment.setInitialLayout(vk::ImageLayout::eUndefined);
+	finalColorAttachment.setFinalLayout(vk::ImageLayout::ePresentSrcKHR);
+
+	vk::AttachmentDescription resolveAttachment = {};
+	resolveAttachment.setFormat(_resolve->getFormat());
+	resolveAttachment.setSamples(vk::SampleCountFlagBits::e1);
+	resolveAttachment.setLoadOp(vk::AttachmentLoadOp::eDontCare);
+	resolveAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+	resolveAttachment.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare);
+	resolveAttachment.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
+	resolveAttachment.setInitialLayout(vk::ImageLayout::eUndefined);
+	resolveAttachment.setFinalLayout(vk::ImageLayout::eColorAttachmentOptimal);
+
+	vk::AttachmentDescription colorAttachment = {};
+	colorAttachment.setFormat(_color.getFormat());
+	colorAttachment.setSamples(_msaaSamples);
+	colorAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+	colorAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+	colorAttachment.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare);
+	colorAttachment.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
+	colorAttachment.setInitialLayout(vk::ImageLayout::eUndefined);
+	colorAttachment.setFinalLayout(vk::ImageLayout::eColorAttachmentOptimal);
+
+	vk::AttachmentDescription depthAttachment = {};
+	depthAttachment.setFormat(_depth.getFormat());
+	depthAttachment.setSamples(_msaaSamples);
+	depthAttachment.setLoadOp(vk::AttachmentLoadOp::eClear);
+	depthAttachment.setStoreOp(vk::AttachmentStoreOp::eStore);
+	depthAttachment.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare);
+	depthAttachment.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
+	depthAttachment.setInitialLayout(vk::ImageLayout::eUndefined);
+	depthAttachment.setFinalLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+	// references
+
+	vk::AttachmentReference finalColorRef = {};
+	finalColorRef.setAttachment(0);
+	finalColorRef.setLayout(vk::ImageLayout::eColorAttachmentOptimal);
+
+	vk::AttachmentReference resolveRef = {};
+	resolveRef.setAttachment(1);
+	resolveRef.setLayout(vk::ImageLayout::eColorAttachmentOptimal);
+
+	vk::AttachmentReference resolveShaderReadRef = {};
+	resolveShaderReadRef.setAttachment(1);
+	resolveShaderReadRef.setLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	vk::AttachmentReference colorRef = {};
+	colorRef.setAttachment(2);
+	colorRef.setLayout(vk::ImageLayout::eColorAttachmentOptimal);
+
+	vk::AttachmentReference depthRef = {};
+	depthRef.setAttachment(3);
+	depthRef.setLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+	// subpasses
+
+	vk::SubpassDescription depthPass = {};
+	depthPass.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
+	depthPass.setPDepthStencilAttachment(&depthRef);
+
+	vk::SubpassDescription mainPass = {};
+	mainPass.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
+	mainPass.setColorAttachments(colorRef);
+	mainPass.setPDepthStencilAttachment(&depthRef);
+	mainPass.setResolveAttachments(resolveRef);
+
+	vk::SubpassDescription tonemapPass = {};
+	tonemapPass.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
+	tonemapPass.setColorAttachments(finalColorRef);
+	tonemapPass.setInputAttachments(resolveShaderReadRef);
+
+	// dependencies
+
+	vk::SubpassDependency depthDependency = {};
+	depthDependency.setSrcSubpass(DEPTH_PASS);
+	depthDependency.setDstSubpass(MAIN_PASS);
+	depthDependency.setSrcStageMask(vk::PipelineStageFlagBits::eEarlyFragmentTests |
+									vk::PipelineStageFlagBits::eLateFragmentTests);
+	depthDependency.setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader);
+	depthDependency.setSrcAccessMask(vk::AccessFlagBits::eDepthStencilAttachmentWrite);
+	depthDependency.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+
+	vk::SubpassDependency mainDependency = {};
+	mainDependency.setSrcSubpass(MAIN_PASS);
+	mainDependency.setDstSubpass(TONEMAP_PASS);
+	mainDependency.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+	mainDependency.setDstStageMask(vk::PipelineStageFlagBits::eFragmentShader);
+	mainDependency.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
+	mainDependency.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+
+	// render pass
+
+	std::array<vk::AttachmentDescription, 4> attachments = {
+		finalColorAttachment,
+		resolveAttachment,
+		colorAttachment,
+		depthAttachment,
+	};
+
+	std::array<vk::SubpassDescription, 3> subpasses = {
+		depthPass,
+		mainPass,
+		tonemapPass,
+	};
+
+	std::array<vk::SubpassDependency, 2> dependencies = {
+		depthDependency,
+		mainDependency,
+	};
+
+	vk::RenderPassCreateInfo renderPassInfo = {};
+	renderPassInfo.setAttachments(attachments);
+	renderPassInfo.setSubpasses(subpasses);
+	renderPassInfo.setDependencies(dependencies);
+
+	_renderPass = _device.createRenderPass(renderPassInfo);
+
+	// framebuffers
+
+	vk::ImageSubresourceRange subresourceRange = {};
+	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	subresourceRange.setBaseMipLevel(0);
+	subresourceRange.setLevelCount(1);
+	subresourceRange.setBaseArrayLayer(0);
+	subresourceRange.setLayerCount(1);
+
+	for (size_t i = 0; i < swapchainImages.size(); i++) {
+		vk::ImageViewCreateInfo createInfo = {};
+		createInfo.setImage(swapchainImages[i]);
+		createInfo.setViewType(vk::ImageViewType::e2D);
+		createInfo.setFormat(format);
+		createInfo.setSubresourceRange(subresourceRange);
+
+		vk::ImageView finalColorView = _device.createImageView(createInfo);
+
+		std::array<vk::ImageView, 4> attachmentViews = {
+			finalColorView,
+			_resolve->getImageView(),
+			_color.getImageView(),
+			_depth.getImageView(),
+		};
+
+		vk::FramebufferCreateInfo framebufferInfo = {};
+		framebufferInfo.setRenderPass(_renderPass);
+		framebufferInfo.setAttachments(attachmentViews);
+		framebufferInfo.setWidth(width);
+		framebufferInfo.setHeight(height);
 		framebufferInfo.setLayers(1);
 
 		vk::Framebuffer framebuffer;
@@ -511,6 +703,11 @@ void VulkanContext::_createSwapchain(uint32_t width, uint32_t height) {
 }
 
 void VulkanContext::_destroySwapchain() {
+	if (_resolve.has_value()) {
+		_resolve->destroy(_device);
+		_resolve.reset();
+	}
+
 	_color.destroy(_device);
 	_depth.destroy(_device);
 
@@ -584,6 +781,14 @@ uint32_t VulkanContext::getGraphicsQueueFamily() const {
 	return _graphicsQueueFamily;
 }
 
+void VulkanContext::setMSAASamples(vk::SampleCountFlagBits samples) {
+	_msaaSamples = samples;
+}
+
+vk::SampleCountFlagBits VulkanContext::getMSAASamples() const {
+	return _msaaSamples;
+}
+
 vk::SwapchainKHR VulkanContext::getSwapchain() const {
 	return _swapchain;
 }
@@ -601,6 +806,9 @@ vk::Framebuffer VulkanContext::getFramebuffer(uint32_t imageIndex) const {
 }
 
 Attachment VulkanContext::getColorAttachment() const {
+	if (_resolve.has_value())
+		return _resolve.value();
+
 	return _color;
 }
 

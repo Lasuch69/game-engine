@@ -23,6 +23,14 @@ typedef uint64_t Material;
 
 #define NULL_HANDLE 0
 
+enum MSAA {
+	MSAA_X1 = 0,
+	MSAA_X2 = 1,
+	MSAA_X4 = 2,
+	MSAA_X8 = 3,
+	MSAA_MAX = 4,
+};
+
 class RenderingServer {
 public:
 	static RenderingServer &getInstance() {
@@ -110,6 +118,9 @@ public:
 	Material materialCreate(Texture albedo = NULL_HANDLE, Texture normal = NULL_HANDLE,
 			Texture metallic = NULL_HANDLE, Texture roughness = NULL_HANDLE);
 	void materialFree(Material material);
+
+	void MSAASamplesSet(MSAA samples);
+	MSAA MSAASamplesGet() const;
 
 	void draw();
 

@@ -149,15 +149,34 @@ int main(int argc, char *argv[]) {
 			}
 
 			if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-				static int currentItem = 0;
+				{
+					static int samples = RS::getInstance().MSAASamplesGet();
+					const int _samples = samples;
 
-				const char *items[] = {
-					"Mailbox",
-					"Fifo",
-					"Immediate",
-				};
+					const char *pItems[] = {
+						"X1",
+						"X2",
+						"X4",
+						"X8",
+					};
 
-				ImGui::Combo("Present Mode", &currentItem, items, 3);
+					ImGui::Combo("MSAA", &samples, pItems, MSAA_MAX);
+
+					if (_samples != samples)
+						RS::getInstance().MSAASamplesSet(static_cast<MSAA>(samples));
+				}
+
+				{
+					static int presentMode = 0;
+
+					const char *pItems[] = {
+						"Mailbox",
+						"Fifo",
+						"Immediate",
+					};
+
+					ImGui::Combo("Present Mode", &presentMode, pItems, 3);
+				}
 			}
 
 			if (ImGui::CollapsingHeader("Stats", ImGuiTreeNodeFlags_DefaultOpen)) {

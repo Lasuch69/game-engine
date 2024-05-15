@@ -97,7 +97,7 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	vk::PipelineDepthStencilStateCreateInfo depthStencil;
 	depthStencil.setDepthTestEnable(VK_TRUE);
 	depthStencil.setDepthWriteEnable(writeDepth);
-	depthStencil.setDepthCompareOp(vk::CompareOp::eLessOrEqual);
+	depthStencil.setDepthCompareOp(vk::CompareOp::eGreaterOrEqual);
 	depthStencil.setDepthBoundsTestEnable(VK_FALSE);
 	depthStencil.setStencilTestEnable(VK_FALSE);
 
@@ -560,7 +560,7 @@ vk::CommandBuffer RD::drawBegin() {
 	std::array<vk::ClearValue, 3> clearValues;
 	clearValues[0] = vk::ClearValue();
 	clearValues[1].color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
-	clearValues[2].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+	clearValues[2].depthStencil = vk::ClearDepthStencilValue(0.0f, 0);
 
 	vk::Extent2D extent = _pContext->getSwapchainExtent();
 

@@ -140,7 +140,7 @@ void main() {
 
 		// add to outgoing radiance Lo
 		float NdotL = max(dot(N, L), 0.0);
-		Lo += (kD * albedo / PI + specular) * NdotL;
+		Lo += (kD * albedo / PI + specular) * lightColor * NdotL;
 	}
 
 	// point lights

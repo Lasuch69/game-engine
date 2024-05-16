@@ -15,40 +15,49 @@ bool Scene::load(const std::filesystem::path &path) {
 	Loader::Scene scene = result.value();
 
 	for (const Loader::Material &sceneMaterial : scene.materials) {
-		Texture albedo = NULL_HANDLE;
-		Texture normal = NULL_HANDLE;
-		Texture metallic = NULL_HANDLE;
-		Texture roughness = NULL_HANDLE;
+		RS::MaterialInfo info;
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
 		if (albedoIndex.has_value()) {
 			std::shared_ptr<Image> albedoMap = scene.images[albedoIndex.value()];
-			albedo = RS::getInstance().textureCreate(albedoMap);
-			_textures.push_back(albedo);
+
+			Texture t = RS::getInstance().textureCreate(albedoMap);
+			_textures.push_back(t);
+
+			info.albedo = t;
 		}
 
 		std::optional<size_t> normalIndex = sceneMaterial.normalIndex;
 		if (normalIndex.has_value()) {
 			std::shared_ptr<Image> normalMap = scene.images[normalIndex.value()];
-			normal = RS::getInstance().textureCreate(normalMap);
-			_textures.push_back(normal);
+
+			Texture t = RS::getInstance().textureCreate(normalMap);
+			_textures.push_back(t);
+
+			info.normal = t;
 		}
 
 		std::optional<size_t> metallicIndex = sceneMaterial.metallicIndex;
 		if (metallicIndex.has_value()) {
 			std::shared_ptr<Image> metallicMap = scene.images[metallicIndex.value()];
-			metallic = RS::getInstance().textureCreate(metallicMap);
-			_textures.push_back(metallic);
+
+			Texture t = RS::getInstance().textureCreate(metallicMap);
+			_textures.push_back(t);
+
+			info.metallic = t;
 		}
 
 		std::optional<size_t> roughnessIndex = sceneMaterial.roughnessIndex;
 		if (roughnessIndex.has_value()) {
 			std::shared_ptr<Image> roughnessMap = scene.images[roughnessIndex.value()];
-			roughness = RS::getInstance().textureCreate(roughnessMap);
-			_textures.push_back(roughness);
+
+			Texture t = RS::getInstance().textureCreate(roughnessMap);
+			_textures.push_back(t);
+
+			info.roughness = t;
 		}
 
-		Material material = RS::getInstance().materialCreate(albedo, normal, metallic, roughness);
+		Material material = RS::getInstance().materialCreate(info);
 		_materials.push_back(material);
 	}
 

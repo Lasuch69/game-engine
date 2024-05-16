@@ -194,86 +194,66 @@ void RS::textureFree(Texture texture) {
 	_pDevice->textureDestroy(_texture.value());
 }
 
-Material RS::materialCreate(Texture albedo, Texture normal, Texture metallic, Texture roughness) {
-	if (!_textures.has(albedo))
-		albedo = _whiteTexture;
+Material RS::materialCreate(const MaterialInfo &info) {
+	TextureRD albedo = _textures.get_id_or_else(info.albedo, _albedoFallback);
+	TextureRD normal = _textures.get_id_or_else(info.normal, _normalFallback);
+	TextureRD metallic = _textures.get_id_or_else(info.metallic, _metallicFallback);
+	TextureRD roughness = _textures.get_id_or_else(info.roughness, _roughnessFallback);
 
-	TextureRD _albedo = _textures[albedo];
+	std::array<vk::DescriptorImageInfo, 4> imageInfos = {};
+	imageInfos[0].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+	imageInfos[0].setImageView(albedo.imageView);
+	imageInfos[0].setSampler(albedo.sampler);
 
-	if (!_textures.has(normal))
-		normal = _whiteTexture;
+	imageInfos[1].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+	imageInfos[1].setImageView(normal.imageView);
+	imageInfos[1].setSampler(normal.sampler);
 
-	TextureRD _normal = _textures[normal];
+	imageInfos[2].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+	imageInfos[2].setImageView(metallic.imageView);
+	imageInfos[2].setSampler(metallic.sampler);
 
-	if (!_textures.has(metallic))
-		metallic = _whiteTexture;
-
-	TextureRD _metallic = _textures[metallic];
-
-	if (!_textures.has(roughness))
-		roughness = _whiteTexture;
-
-	TextureRD _roughness = _textures[roughness];
+	imageInfos[3].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+	imageInfos[3].setImageView(roughness.imageView);
+	imageInfos[3].setSampler(roughness.sampler);
 
 	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
 
-	vk::DescriptorSetAllocateInfo allocInfo =
-			vk::DescriptorSetAllocateInfo()
-					.setDescriptorPool(_pDevice->getDescriptorPool())
-					.setDescriptorSetCount(1)
-					.setSetLayouts(textureLayout);
+	vk::DescriptorSetAllocateInfo allocInfo = {};
+	allocInfo.setDescriptorPool(_pDevice->getDescriptorPool());
+	allocInfo.setDescriptorSetCount(1);
+	allocInfo.setSetLayouts(textureLayout);
 
 	VkDescriptorSet textureSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
 
-	std::array<vk::DescriptorImageInfo, 4> imageInfos = {
-		vk::DescriptorImageInfo()
-				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-				.setImageView(_albedo.imageView)
-				.setSampler(_albedo.sampler),
-		vk::DescriptorImageInfo()
-				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-				.setImageView(_normal.imageView)
-				.setSampler(_normal.sampler),
-		vk::DescriptorImageInfo()
-				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-				.setImageView(_metallic.imageView)
-				.setSampler(_metallic.sampler),
-		vk::DescriptorImageInfo()
-				.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-				.setImageView(_roughness.imageView)
-				.setSampler(_roughness.sampler),
-	};
+	std::array<vk::WriteDescriptorSet, 4> writeInfos = {};
+	writeInfos[0].setDstSet(textureSet);
+	writeInfos[0].setDstBinding(0);
+	writeInfos[0].setDstArrayElement(0);
+	writeInfos[0].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+	writeInfos[0].setDescriptorCount(1);
+	writeInfos[0].setImageInfo(imageInfos[0]);
 
-	std::array<vk::WriteDescriptorSet, 4> writeInfos = {
-		vk::WriteDescriptorSet()
-				.setDstSet(textureSet)
-				.setDstBinding(0)
-				.setDstArrayElement(0)
-				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-				.setDescriptorCount(1)
-				.setImageInfo(imageInfos[0]),
-		vk::WriteDescriptorSet()
-				.setDstSet(textureSet)
-				.setDstBinding(1)
-				.setDstArrayElement(0)
-				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-				.setDescriptorCount(1)
-				.setImageInfo(imageInfos[1]),
-		vk::WriteDescriptorSet()
-				.setDstSet(textureSet)
-				.setDstBinding(2)
-				.setDstArrayElement(0)
-				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-				.setDescriptorCount(1)
-				.setImageInfo(imageInfos[2]),
-		vk::WriteDescriptorSet()
-				.setDstSet(textureSet)
-				.setDstBinding(3)
-				.setDstArrayElement(0)
-				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-				.setDescriptorCount(1)
-				.setImageInfo(imageInfos[3]),
-	};
+	writeInfos[1].setDstSet(textureSet);
+	writeInfos[1].setDstBinding(1);
+	writeInfos[1].setDstArrayElement(0);
+	writeInfos[1].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+	writeInfos[1].setDescriptorCount(1);
+	writeInfos[1].setImageInfo(imageInfos[1]);
+
+	writeInfos[2].setDstSet(textureSet);
+	writeInfos[2].setDstBinding(2);
+	writeInfos[2].setDstArrayElement(0);
+	writeInfos[2].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+	writeInfos[2].setDescriptorCount(1);
+	writeInfos[2].setImageInfo(imageInfos[2]);
+
+	writeInfos[3].setDstSet(textureSet);
+	writeInfos[3].setDstBinding(3);
+	writeInfos[3].setDstArrayElement(0);
+	writeInfos[3].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+	writeInfos[3].setDescriptorCount(1);
+	writeInfos[3].setImageInfo(imageInfos[3]);
 
 	_pDevice->getDevice().updateDescriptorSets(writeInfos, nullptr);
 
@@ -360,11 +340,33 @@ void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_width = width;
 	_height = height;
 
-	std::shared_ptr<Image> whiteImage(
-			new Image(1, 1, Image::Format::RGBA8, { 255, 255, 255, 255 }));
+	{
+		std::vector<uint8_t> data = { 255, 255, 255, 255 };
+		std::shared_ptr<Image> albedo(new Image(1, 1, Image::Format::RGBA8, data));
 
-	// create fallback white texture
-	_whiteTexture = textureCreate(whiteImage);
+		_albedoFallback = _pDevice->textureCreate(albedo);
+	}
+
+	{
+		std::vector<uint8_t> data = { 127, 127 };
+		std::shared_ptr<Image> normal(new Image(1, 1, Image::Format::RG8, data));
+
+		_normalFallback = _pDevice->textureCreate(normal);
+	}
+
+	{
+		std::vector<uint8_t> data = { 0 };
+		std::shared_ptr<Image> metallic(new Image(1, 1, Image::Format::R8, data));
+
+		_metallicFallback = _pDevice->textureCreate(metallic);
+	}
+
+	{
+		std::vector<uint8_t> data = { 127 };
+		std::shared_ptr<Image> roughness(new Image(1, 1, Image::Format::R8, data));
+
+		_roughnessFallback = _pDevice->textureCreate(roughness);
+	}
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {

@@ -40,6 +40,13 @@ public:
 		Material material;
 	};
 
+	struct MaterialInfo {
+		Texture albedo;
+		Texture normal;
+		Texture metallic;
+		Texture roughness;
+	};
+
 private:
 	struct PrimitiveRD {
 		uint32_t indexCount;
@@ -65,7 +72,11 @@ private:
 	RenderingDevice *_pDevice;
 	uint32_t _width, _height = 0;
 
-	Texture _whiteTexture = NULL_HANDLE;
+	// fallbacks
+	TextureRD _albedoFallback;
+	TextureRD _normalFallback;
+	TextureRD _metallicFallback;
+	TextureRD _roughnessFallback;
 
 	Camera _camera;
 	RIDOwner<MeshRD> _meshes;
@@ -107,8 +118,7 @@ public:
 	Texture textureCreate(const std::shared_ptr<Image> image);
 	void textureFree(Texture texture);
 
-	Material materialCreate(Texture albedo = NULL_HANDLE, Texture normal = NULL_HANDLE,
-			Texture metallic = NULL_HANDLE, Texture roughness = NULL_HANDLE);
+	Material materialCreate(const MaterialInfo &info);
 	void materialFree(Material material);
 
 	void draw();

@@ -5,21 +5,21 @@
 #include <optional>
 #include <unordered_map>
 
-template <typename Value> class RIDOwner {
+template <typename T> class RIDOwner {
 private:
-	std::unordered_map<uint64_t, Value> _map;
+	std::unordered_map<uint64_t, T> _map;
 	uint64_t _last = 0;
 
 public:
-	Value &operator[](uint64_t id) {
+	T &operator[](uint64_t id) {
 		return _map[id];
 	}
 
-	std::unordered_map<uint64_t, Value> &map() {
+	std::unordered_map<uint64_t, T> &map() {
 		return _map;
 	}
 
-	uint64_t insert(Value value) {
+	uint64_t insert(T value) {
 		_last++;
 		_map[_last] = value;
 
@@ -31,15 +31,22 @@ public:
 		return iter != _map.end();
 	}
 
+	T get_id_or_else(uint64_t id, T value) {
+		if (has(id))
+			return _map[id];
+
+		return value;
+	}
+
 	uint64_t size() const {
 		return _map.size();
 	}
 
 	// returned value needs to be cleaned
-	std::optional<Value> remove(uint64_t id) {
+	std::optional<T> remove(uint64_t id) {
 		auto iter = _map.find(id);
 
-		std::optional<Value> value;
+		std::optional<T> value;
 		if (iter != _map.end()) {
 			value = iter->second;
 			_map.erase(iter);

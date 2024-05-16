@@ -13,6 +13,7 @@ public:
 		LA8,
 		RGB8,
 		RGBA8,
+		RGBA32F,
 	};
 
 	enum class Channel {
@@ -43,13 +44,13 @@ public:
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;
-	Format getFormat() const;
-	std::vector<uint8_t> getData() const;
 
+	Format getFormat() const;
 	uint32_t getPixelSize() const;
 
+	std::vector<uint8_t> getData() const;
+
 	Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);
-	Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data);
 };
 
 #endif // !IMAGE_H

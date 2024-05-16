@@ -1,24 +1,12 @@
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
+
+#include <SDL2/SDL_log.h>
 
 #include "image.h"
 
-static Image::Format channelsToFormat(uint32_t channels) {
-	switch (channels) {
-		case 1:
-			return Image::Format::R8;
-		case 2:
-			return Image::Format::RG8;
-		case 3:
-			return Image::Format::RGB8;
-		case 4:
-			return Image::Format::RGBA8;
-	}
-
-	return Image::Format::R8;
-}
-
-static uint32_t formatToChannels(Image::Format format) {
+static uint32_t getFormatPixelSize(Image::Format format) {
 	switch (format) {
 		case Image::Format::R8:
 		case Image::Format::L8:
@@ -30,13 +18,15 @@ static uint32_t formatToChannels(Image::Format format) {
 			return 3;
 		case Image::Format::RGBA8:
 			return 4;
+		case Image::Format::RGBA32F:
+			return 16;
 	}
 
 	return 1;
 }
 
 Image::Color Image::_getPixelAtOffset(size_t offset) const {
-	uint32_t i = offset * formatToChannels(_format);
+	uint32_t i = offset * getPixelSize();
 
 	Color color = {};
 
@@ -64,13 +54,15 @@ Image::Color Image::_getPixelAtOffset(size_t offset) const {
 			color.b = _data[i + 2];
 			color.a = _data[i + 3];
 			break;
+		default:
+			throw std::runtime_error("Unsupported image format!");
 	}
 
 	return color;
 }
 
 void Image::_setPixelAtOffset(size_t offset, const Color &color) {
-	uint32_t i = offset * formatToChannels(_format);
+	uint32_t i = offset * getPixelSize();
 
 	switch (_format) {
 		case Format::R8:
@@ -96,15 +88,22 @@ void Image::_setPixelAtOffset(size_t offset, const Color &color) {
 			_data[i + 2] = color.b;
 			_data[i + 3] = color.a;
 			break;
+		default:
+			throw std::runtime_error("Unsupported image format!");
 	}
 }
 
 Image *Image::getColorMap() const {
+	if (_format == Image::Format::RGBA32F) {
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for color mapping!");
+		return nullptr;
+	}
+
 	Format format = Format::RGBA8;
 	size_t pixelCount = _width * _height;
-	uint32_t channels = formatToChannels(format);
+	uint32_t pixelSize = getFormatPixelSize(format);
 
-	std::vector<uint8_t> newData(pixelCount * channels);
+	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pColorMap = new Image(_width, _height, format, newData);
 
 	for (size_t offset = 0; offset < pixelCount; offset++) {
@@ -116,11 +115,16 @@ Image *Image::getColorMap() const {
 }
 
 Image *Image::getNormalMap() const {
+	if (_format == Image::Format::RGBA32F) {
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for normal mapping!");
+		return nullptr;
+	}
+
 	Format format = Format::RG8;
 	size_t pixelCount = _width * _height;
-	uint32_t channels = formatToChannels(format);
+	uint32_t pixelSize = getFormatPixelSize(format);
 
-	std::vector<uint8_t> newData(pixelCount * channels);
+	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pNormalMap = new Image(_width, _height, format, newData);
 
 	for (size_t offset = 0; offset < pixelCount; offset++) {
@@ -132,11 +136,17 @@ Image *Image::getNormalMap() const {
 }
 
 Image *Image::getMetallicMap(Channel channel) const {
+	if (_format == Image::Format::RGBA32F) {
+		SDL_LogError(
+				SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for metallic mapping!");
+		return nullptr;
+	}
+
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
-	uint32_t channels = formatToChannels(format);
+	uint32_t pixelSize = getFormatPixelSize(format);
 
-	std::vector<uint8_t> newData(pixelCount * channels);
+	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pMetallicMap = new Image(_width, _height, format, newData);
 
 	for (size_t offset = 0; offset < pixelCount; offset++) {
@@ -166,11 +176,17 @@ Image *Image::getMetallicMap(Channel channel) const {
 }
 
 Image *Image::getRoughnessMap(Channel channel) const {
+	if (_format == Image::Format::RGBA32F) {
+		SDL_LogError(
+				SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for roughness mapping!");
+		return nullptr;
+	}
+
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
-	uint32_t channels = formatToChannels(format);
+	uint32_t pixelSize = getFormatPixelSize(format);
 
-	std::vector<uint8_t> newData(pixelCount * channels);
+	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pRoughnessMap = new Image(_width, _height, format, newData);
 
 	for (size_t offset = 0; offset < pixelCount; offset++) {
@@ -216,19 +232,12 @@ std::vector<uint8_t> Image::getData() const {
 }
 
 uint32_t Image::getPixelSize() const {
-	return formatToChannels(_format);
+	return getFormatPixelSize(_format);
 }
 
 Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
 	_width = width;
 	_height = height;
 	_format = format;
-	_data = data;
-}
-
-Image::Image(uint32_t width, uint32_t height, uint32_t channels, const std::vector<uint8_t> &data) {
-	_width = width;
-	_height = height;
-	_format = channelsToFormat(channels);
 	_data = data;
 }

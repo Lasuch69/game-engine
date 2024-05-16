@@ -29,6 +29,8 @@ static vk::Format getVkFormat(Image::Format format) {
 			return vk::Format::eR8G8B8Unorm;
 		case Image::Format::RGBA8:
 			return vk::Format::eR8G8B8A8Unorm;
+		case Image::Format::RGBA32F:
+			return vk::Format::eR32G32B32A32Sfloat;
 		default:
 			return vk::Format::eUndefined;
 	}

@@ -1,8 +1,8 @@
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <vector>
-
-#include <SDL2/SDL_log.h>
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/glm_element_traits.hpp>
@@ -14,9 +14,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include <stb/stb_image.h>
+#include <SDL2/SDL_log.h>
 
-#include "image.h"
+#include "image_loader.h"
 #include "loader.h"
 
 // needed for candela to lumen conversion
@@ -46,29 +46,22 @@ glm::mat4 _getTransformMatrix(const fastgltf::Node &gltfNode) {
 	return glm::mat4(1.0f);
 }
 
-Image *_loadImage(fastgltf::Asset *pAsset, fastgltf::Image &gltfImage,
-		const std::filesystem::path &rootPath) {
-	int width, height, channels = 0;
-	stbi_uc *pData = nullptr;
+Image *_loadImage(const fastgltf::Asset *pAsset, const std::filesystem::path &rootPath,
+		fastgltf::Image &image) {
+	Image *pImage = nullptr;
 
 	auto loadFromPath = [&](fastgltf::sources::URI &filepath) {
 		assert(filepath.fileByteOffset == 0); // We don't support offsets with stbi.
 
-		std::filesystem::path path(filepath.uri.path().begin(),
-				filepath.uri.path().end()); // Thanks C++.
-
-		// should be absolute
+		std::filesystem::path path(filepath.uri.path().data());
 		path = (rootPath / path);
-		assert(path.is_absolute());
 
-		pData = stbi_load(path.c_str(), &width, &height, &channels, STBI_default);
+		assert(path.is_absolute());
+		pImage = ImageLoader::loadFromFile(path);
 	};
 
 	auto loadFromMemory = [&](fastgltf::sources::Vector &vector) {
-		uint8_t *pBytes = vector.bytes.data();
-		int len = static_cast<int>(vector.bytes.size());
-
-		pData = stbi_load_from_memory(pBytes, len, &width, &height, &channels, STBI_default);
+		pImage = ImageLoader::loadFromMemory(vector.bytes);
 	};
 
 	fastgltf::visitor visitor = fastgltf::visitor{
@@ -91,18 +84,8 @@ Image *_loadImage(fastgltf::Asset *pAsset, fastgltf::Image &gltfImage,
 		},
 	};
 
-	std::visit(visitor, gltfImage.data);
-
-	if (pData == nullptr)
-		return nullptr;
-
-	size_t size = width * height * channels;
-
-	std::vector<uint8_t> data(size);
-	memcpy(data.data(), pData, size);
-	stbi_image_free(pData);
-
-	return new Image(width, height, channels, data);
+	std::visit(visitor, image.data);
+	return pImage;
 }
 
 void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex> &vertices) {
@@ -236,54 +219,63 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 				gltfMaterial.pbrData.baseColorTexture;
 
 		if (albedoInfo.has_value()) {
-			fastgltf::Image &gltfImage = pAsset->images[albedoInfo->textureIndex];
-			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
+			fastgltf::Image &image = pAsset->images[albedoInfo->textureIndex];
+			std::shared_ptr<Image> _albedoImage(_loadImage(pAsset, path.parent_path(), image));
 
-			std::shared_ptr<Image> albedoMap(image->getColorMap());
+			if (_albedoImage != nullptr) {
+				std::shared_ptr<Image> albedoMap(_albedoImage->getColorMap());
 
-			uint32_t idx = images.size();
-			images.push_back(albedoMap);
-			material.albedoIndex = idx;
+				uint32_t idx = images.size();
+				images.push_back(albedoMap);
+				material.albedoIndex = idx;
+			}
 		}
 
 		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = gltfMaterial.normalTexture;
 
 		if (normalInfo.has_value()) {
-			fastgltf::Image &gltfImage = pAsset->images[normalInfo->textureIndex];
-			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
+			fastgltf::Image &image = pAsset->images[normalInfo->textureIndex];
+			std::shared_ptr<Image> _normalImage(_loadImage(pAsset, path.parent_path(), image));
 
-			std::shared_ptr<Image> normalMap(image->getNormalMap());
+			if (_normalImage != nullptr) {
+				std::shared_ptr<Image> normalMap(_normalImage->getNormalMap());
 
-			uint32_t idx = images.size();
-			images.push_back(normalMap);
-			material.normalIndex = idx;
+				uint32_t idx = images.size();
+				images.push_back(normalMap);
+				material.normalIndex = idx;
+			}
 		}
 
 		const std::optional<fastgltf::TextureInfo> &metallicRoughnessInfo =
 				gltfMaterial.pbrData.metallicRoughnessTexture;
 
 		if (metallicRoughnessInfo.has_value()) {
-			fastgltf::Image &gltfImage = pAsset->images[metallicRoughnessInfo->textureIndex];
-			std::shared_ptr<Image> image(_loadImage(pAsset, gltfImage, path.parent_path()));
+			fastgltf::Image &image = pAsset->images[metallicRoughnessInfo->textureIndex];
+			std::shared_ptr<Image> _metallicRoughnessimage(
+					_loadImage(pAsset, path.parent_path(), image));
 
-			{
-				// metallic in blue channel
-				std::shared_ptr<Image> metallicMap(image->getMetallicMap(Image::Channel::B));
+			if (_metallicRoughnessimage != nullptr) {
+				{
+					// metallic in blue channel
+					std::shared_ptr<Image> metallicMap(
+							_metallicRoughnessimage->getMetallicMap(Image::Channel::B));
 
-				uint32_t idx = images.size();
-				images.push_back(metallicMap);
+					uint32_t idx = images.size();
+					images.push_back(metallicMap);
 
-				material.metallicIndex = idx;
-			}
+					material.metallicIndex = idx;
+				}
 
-			{
-				// roughness in green channel
-				std::shared_ptr<Image> roughnessMap(image->getRoughnessMap(Image::Channel::G));
+				{
+					// roughness in green channel
+					std::shared_ptr<Image> roughnessMap(
+							_metallicRoughnessimage->getRoughnessMap(Image::Channel::G));
 
-				uint32_t idx = images.size();
-				images.push_back(roughnessMap);
+					uint32_t idx = images.size();
+					images.push_back(roughnessMap);
 
-				material.roughnessIndex = idx;
+					material.roughnessIndex = idx;
+				}
 			}
 		}
 

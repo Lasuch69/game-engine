@@ -1,4 +1,5 @@
 #include <SDL2/SDL_events.h>
+#include <SDL2/SDL_log.h>
 #include <SDL2/SDL_mouse.h>
 #include <cstdint>
 #include <cstdio>
@@ -8,6 +9,9 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
+#include <glm/fwd.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/trigonometric.hpp>
 #include <vulkan/vulkan.hpp>
 
 #include <imgui.h>
@@ -143,12 +147,51 @@ int main(int argc, char *argv[]) {
 		if (isGuiVisible) {
 			ImGui::Begin("ImGui", &isGuiVisible);
 
-			if (ImGui::CollapsingHeader("Inspector", ImGuiTreeNodeFlags_DefaultOpen)) {
-				static float color[4];
-				static float value = 0.5f;
+			if (ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen)) {
+				static bool enabled = false;
+				bool toggled = false;
 
-				ImGui::ColorEdit4("Test Color", color);
-				ImGui::SliderFloat("Value", &value, 0.0f, 1.0f);
+				{
+					bool _enable = enabled;
+					ImGui::Checkbox("Enable", &enabled);
+					toggled = _enable != enabled;
+				}
+
+				static float direction[3] = { -45.0f, 60.0f, 0.0f };
+				static float color[3] = { 1.0f, 1.0f, 1.0f };
+				static float intensity = 1.0f;
+
+				ImGui::DragFloat3("Direction", direction, 0.1f, -720.0f, 720.0f, "%.1f");
+				ImGui::ColorEdit3("Color", color);
+				ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 128.0f, "%.2f");
+
+				static DirectionalLight sun;
+
+				if (toggled) {
+					if (enabled) {
+						sun = RS::getInstance().directionalLightCreate();
+					} else {
+						RS::getInstance().directionalLightFree(sun);
+					}
+				}
+
+				if (enabled) {
+					glm::vec3 d = glm::make_vec3(direction);
+					d.x = glm::radians(d.x);
+					d.y = glm::radians(d.y);
+					d.z = glm::radians(d.z);
+
+					glm::mat4 t(1.0f);
+					t = glm::rotate(t, d.y, glm::vec3(0.0, 1.0, 0.0)); // rotate X
+					t = glm::rotate(t, d.x, glm::vec3(1.0, 0.0, 0.0)); // rotate Y
+
+					glm::mat3 r(t);
+					glm::vec3 f(0.0f, 0.0f, -1.0f);
+
+					RS::getInstance().directionalLightSetDirection(sun, r * f);
+					RS::getInstance().directionalLightSetColor(sun, glm::make_vec3(color));
+					RS::getInstance().directionalLightSetIntensity(sun, intensity);
+				}
 			}
 
 			if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {

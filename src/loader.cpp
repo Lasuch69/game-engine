@@ -2,10 +2,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <variant>
 #include <vector>
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/glm_element_traits.hpp>
+#include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 
 #include <glm/glm.hpp>
@@ -24,14 +26,14 @@ const float STERADIAN = glm::pi<float>() * 4.0f;
 
 using namespace Loader;
 
-glm::mat4 _getTransformMatrix(const fastgltf::Node &gltfNode) {
+glm::mat4 _getTransformMatrix(const fastgltf::Node &node) {
 	/** Both a matrix and TRS values are not allowed
 	 * to exist at the same time according to the spec */
-	if (const auto *pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&gltfNode.transform)) {
+	if (const auto *pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
 		return glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
 	}
 
-	if (const auto *pTransform = std::get_if<fastgltf::TRS>(&gltfNode.transform)) {
+	if (const auto *pTransform = std::get_if<fastgltf::TRS>(&node.transform)) {
 		// Warning: The quaternion to mat4x4 conversion here is not correct with all versions of
 		// glm. glTF provides the quaternion as (x, y, z, w), which is the same layout glm used up
 		// to version 0.9.9.8. However, with commit 59ddeb7 (May 2021) the default order was changed
@@ -46,46 +48,43 @@ glm::mat4 _getTransformMatrix(const fastgltf::Node &gltfNode) {
 	return glm::mat4(1.0f);
 }
 
-Image *_loadImage(const fastgltf::Asset *pAsset, const std::filesystem::path &rootPath,
-		fastgltf::Image &image) {
-	Image *pImage = nullptr;
+Image *_loadImage(
+		fastgltf::Asset &asset, const std::filesystem::path &rootPath, fastgltf::Image &image) {
+	fastgltf::sources::URI *pFile = std::get_if<fastgltf::sources::URI>(&image.data);
 
-	auto loadFromPath = [&](fastgltf::sources::URI &filepath) {
-		assert(filepath.fileByteOffset == 0); // We don't support offsets with stbi.
+	if (pFile != nullptr) {
+		assert(pFile->fileByteOffset == 0); // We don't support offsets with stbi.
 
-		std::filesystem::path path(filepath.uri.path().data());
-		path = (rootPath / path);
-
+		std::filesystem::path path(rootPath / pFile->uri.path().data());
 		assert(path.is_absolute());
-		pImage = ImageLoader::loadFromFile(path);
-	};
 
-	auto loadFromMemory = [&](fastgltf::sources::Vector &vector) {
-		pImage = ImageLoader::loadFromMemory(vector.bytes);
-	};
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from path %s", path.c_str());
+		return ImageLoader::loadFromFile(path);
+	}
 
-	fastgltf::visitor visitor = fastgltf::visitor{
-		[](auto &arg) {},
-		[&](fastgltf::sources::URI &filepath) { loadFromPath(filepath); },
-		[&](fastgltf::sources::Vector &vector) { loadFromMemory(vector); },
-		[&](fastgltf::sources::BufferView &view) {
-			auto &bufferView = pAsset->bufferViews[view.bufferViewIndex];
-			auto &buffer = pAsset->buffers[bufferView.bufferIndex];
+	fastgltf::sources::Vector *pVector = std::get_if<fastgltf::sources::Vector>(&image.data);
 
-			// We only care about VectorWithMime here, because we
-			// specify LoadExternalBuffers, meaning
-			// all buffers are already loaded into a vector.
-			fastgltf::visitor visitor = fastgltf::visitor{
-				[](auto &arg) {},
-				[&](fastgltf::sources::Vector &vector) { loadFromMemory(vector); },
-			};
+	if (pVector != nullptr) {
+		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from memory");
+		return ImageLoader::loadFromMemory(pVector->bytes);
+	}
 
-			std::visit(visitor, buffer.data);
-		},
-	};
+	fastgltf::sources::BufferView *pView = std::get_if<fastgltf::sources::BufferView>(&image.data);
 
-	std::visit(visitor, image.data);
-	return pImage;
+	if (pView != nullptr) {
+		const fastgltf::BufferView &bufferView = asset.bufferViews[pView->bufferViewIndex];
+		const fastgltf::Buffer &buffer = asset.buffers[bufferView.bufferIndex];
+
+		const fastgltf::sources::Vector *pVector =
+				std::get_if<fastgltf::sources::Vector>(&buffer.data);
+
+		if (pVector != nullptr) {
+			SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from memory");
+			return ImageLoader::loadFromMemory(pVector->bytes);
+		}
+	}
+
+	return nullptr;
 }
 
 void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex> &vertices) {
@@ -130,46 +129,88 @@ void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex>
 	}
 }
 
-Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
+Mesh _loadMesh(fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
 	std::vector<Primitive> primitives = {};
 
-	for (const fastgltf::Primitive &primitive : gltfMesh.primitives) {
-		std::vector<Vertex> vertices;
-
-		auto *positionIter = primitive.findAttribute("POSITION");
-		auto &positionAccessor = pAsset->accessors[positionIter->second];
-
-		// positions are required
-		if (!positionAccessor.bufferViewIndex.has_value())
-			continue;
-
-		vertices.resize(positionAccessor.count);
-
-		fastgltf::iterateAccessorWithIndex<glm::vec3>(*pAsset, positionAccessor,
-				[&](glm::vec3 position, size_t idx) { vertices[idx].position = position; });
-
-		auto *normalIter = primitive.findAttribute("NORMAL");
-		auto &normalAccessor = pAsset->accessors[normalIter->second];
-		if (normalAccessor.bufferViewIndex.has_value()) {
-			fastgltf::iterateAccessorWithIndex<glm::vec3>(*pAsset, normalAccessor,
-					[&](glm::vec3 normal, size_t idx) { vertices[idx].normal = normal; });
-		}
-
-		auto *texCoordIter = primitive.findAttribute("TEXCOORD_0");
-		auto &texCoordAccessor = pAsset->accessors[texCoordIter->second];
-		if (texCoordAccessor.bufferViewIndex.has_value()) {
-			fastgltf::iterateAccessorWithIndex<glm::vec2>(*pAsset, texCoordAccessor,
-					[&](glm::vec2 texCoord, size_t idx) { vertices[idx].uv = texCoord; });
-		}
-
+	for (const fastgltf::Primitive &primitive : mesh.primitives) {
 		std::vector<uint32_t> indices = {};
+		std::vector<Vertex> vertices = {};
 
-		std::size_t idx = 0;
+		{
+			// due to Options::GenerateMeshIndices, this should always be true
+			assert(primitive.indicesAccessor.has_value());
 
-		auto &indexAccessor = pAsset->accessors[primitive.indicesAccessor.value()];
-		indices.resize(indexAccessor.count);
-		fastgltf::iterateAccessor<std::uint32_t>(
-				*pAsset, indexAccessor, [&](std::uint32_t index) { indices[idx++] = index; });
+			size_t accessorIndex = primitive.indicesAccessor.value();
+			auto &_indices = asset.accessors[accessorIndex];
+
+			indices.resize(_indices.count);
+
+			size_t idx = 0;
+			for (uint32_t index : fastgltf::iterateAccessor<uint32_t>(asset, _indices)) {
+				if (idx >= indices.size())
+					break;
+
+				indices[idx] = index;
+				idx++;
+			}
+		}
+
+		{
+			auto *pIter = primitive.findAttribute("POSITION");
+			fastgltf::Accessor &positions = asset.accessors[pIter->second];
+
+			// required
+			if (!positions.bufferViewIndex.has_value())
+				continue;
+
+			vertices.resize(positions.count);
+
+			size_t idx = 0;
+			for (const auto &position : fastgltf::iterateAccessor<glm::vec3>(asset, positions)) {
+				if (idx >= vertices.size())
+					break;
+
+				vertices[idx].position = position;
+				idx++;
+			}
+		}
+
+		for (const auto &attribute : primitive.attributes) {
+			const char *pName = attribute.first.data();
+			const size_t accessorIndex = attribute.second;
+
+			if (strcmp(pName, "NORMAL") == 0) {
+				fastgltf::Accessor &normals = asset.accessors[accessorIndex];
+
+				if (!normals.bufferViewIndex.has_value())
+					continue;
+
+				size_t idx = 0;
+				for (const auto &normal : fastgltf::iterateAccessor<glm::vec3>(asset, normals)) {
+					if (idx >= vertices.size())
+						break;
+
+					vertices[idx].normal = normal;
+					idx++;
+				}
+			}
+
+			if (strcmp(pName, "TEXCOORD_0") == 0) {
+				fastgltf::Accessor &uvs = asset.accessors[accessorIndex];
+
+				if (!uvs.bufferViewIndex.has_value())
+					continue;
+
+				size_t idx = 0;
+				for (const auto &uv : fastgltf::iterateAccessor<glm::vec2>(asset, uvs)) {
+					if (idx >= vertices.size())
+						break;
+
+					vertices[idx].uv = uv;
+					idx++;
+				}
+			}
+		}
 
 		_generateTangents(indices, vertices);
 
@@ -182,77 +223,75 @@ Mesh _loadMesh(fastgltf::Asset *pAsset, const fastgltf::Mesh &gltfMesh) {
 		});
 	}
 
-	return Mesh{
+	return {
 		primitives,
-		gltfMesh.name.c_str(),
+		mesh.name.c_str(),
 	};
 }
 
-std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
+Scene Loader::loadGltf(const std::filesystem::path &path) {
 	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	fastgltf::GltfDataBuffer data;
 	data.loadFromFile(path);
 
-	fastgltf::Expected<fastgltf::Asset> result = parser.loadGltf(&data, path.parent_path(),
-			fastgltf::Options::LoadExternalBuffers | fastgltf::Options::GenerateMeshIndices);
+	fastgltf::Options options = fastgltf::Options::LoadExternalBuffers |
+								fastgltf::Options::LoadGLBBuffers |
+								fastgltf::Options::GenerateMeshIndices;
+
+	std::filesystem::path assetRoot = path.parent_path();
+	fastgltf::Expected<fastgltf::Asset> result = parser.loadGltf(&data, assetRoot, options);
 
 	if (fastgltf::Error err = result.error(); err != fastgltf::Error::None) {
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Asset loading failed: %s",
-				fastgltf::getErrorMessage(err).data());
+		const char *pMsg = fastgltf::getErrorMessage(err).data();
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Asset loading failed: %s", pMsg);
 
 		return {};
 	}
 
-	fastgltf::Asset *pAsset = result.get_if();
+	fastgltf::Asset &asset = result.get();
 
-	std::vector<std::shared_ptr<Image>> images;
-	std::vector<Material> materials;
-	std::vector<Mesh> meshes;
-	std::vector<MeshInstance> meshInstances;
-	std::vector<Light> lights;
+	Scene scene;
 
-	for (const fastgltf::Material &gltfMaterial : pAsset->materials) {
-		Material material = {};
+	for (const fastgltf::Material &material : asset.materials) {
+		Material _material = {};
 
-		const std::optional<fastgltf::TextureInfo> &albedoInfo =
-				gltfMaterial.pbrData.baseColorTexture;
+		const std::optional<fastgltf::TextureInfo> &albedoInfo = material.pbrData.baseColorTexture;
 
 		if (albedoInfo.has_value()) {
-			fastgltf::Image &image = pAsset->images[albedoInfo->textureIndex];
-			std::shared_ptr<Image> _albedoImage(_loadImage(pAsset, path.parent_path(), image));
+			fastgltf::Image &image = asset.images[albedoInfo->textureIndex];
+			std::shared_ptr<Image> _albedoImage(_loadImage(asset, assetRoot, image));
 
 			if (_albedoImage != nullptr) {
 				std::shared_ptr<Image> albedoMap(_albedoImage->getColorMap());
 
-				uint32_t idx = images.size();
-				images.push_back(albedoMap);
-				material.albedoIndex = idx;
+				uint32_t idx = scene.images.size();
+				scene.images.push_back(albedoMap);
+				_material.albedoIndex = idx;
 			}
 		}
 
-		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = gltfMaterial.normalTexture;
+		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = material.normalTexture;
 
 		if (normalInfo.has_value()) {
-			fastgltf::Image &image = pAsset->images[normalInfo->textureIndex];
-			std::shared_ptr<Image> _normalImage(_loadImage(pAsset, path.parent_path(), image));
+			fastgltf::Image &image = asset.images[normalInfo->textureIndex];
+			std::shared_ptr<Image> _normalImage(_loadImage(asset, assetRoot, image));
 
 			if (_normalImage != nullptr) {
 				std::shared_ptr<Image> normalMap(_normalImage->getNormalMap());
 
-				uint32_t idx = images.size();
-				images.push_back(normalMap);
-				material.normalIndex = idx;
+				uint32_t idx = scene.images.size();
+				scene.images.push_back(normalMap);
+				_material.normalIndex = idx;
 			}
 		}
 
 		const std::optional<fastgltf::TextureInfo> &metallicRoughnessInfo =
-				gltfMaterial.pbrData.metallicRoughnessTexture;
+				material.pbrData.metallicRoughnessTexture;
 
 		if (metallicRoughnessInfo.has_value()) {
-			fastgltf::Image &image = pAsset->images[metallicRoughnessInfo->textureIndex];
-			std::shared_ptr<Image> _metallicRoughnessimage(
-					_loadImage(pAsset, path.parent_path(), image));
+			fastgltf::Image &image = asset.images[metallicRoughnessInfo->textureIndex];
+			std::shared_ptr<Image> _metallicRoughnessimage(_loadImage(asset, assetRoot, image));
 
 			if (_metallicRoughnessimage != nullptr) {
 				{
@@ -260,10 +299,10 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 					std::shared_ptr<Image> metallicMap(
 							_metallicRoughnessimage->getMetallicMap(Image::Channel::B));
 
-					uint32_t idx = images.size();
-					images.push_back(metallicMap);
+					uint32_t idx = scene.images.size();
+					scene.images.push_back(metallicMap);
 
-					material.metallicIndex = idx;
+					_material.metallicIndex = idx;
 				}
 
 				{
@@ -271,60 +310,60 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 					std::shared_ptr<Image> roughnessMap(
 							_metallicRoughnessimage->getRoughnessMap(Image::Channel::G));
 
-					uint32_t idx = images.size();
-					images.push_back(roughnessMap);
+					uint32_t idx = scene.images.size();
+					scene.images.push_back(roughnessMap);
 
-					material.roughnessIndex = idx;
+					_material.roughnessIndex = idx;
 				}
 			}
 		}
 
-		materials.push_back(material);
+		scene.materials.push_back(_material);
 	}
 
-	for (const fastgltf::Mesh &gltfMesh : pAsset->meshes) {
-		Mesh mesh = _loadMesh(pAsset, gltfMesh);
-		meshes.push_back(mesh);
+	for (const fastgltf::Mesh &mesh : asset.meshes) {
+		Mesh _mesh = _loadMesh(asset, mesh);
+		scene.meshes.push_back(_mesh);
 	}
 
-	for (const fastgltf::Node &gltfNode : pAsset->nodes) {
-		glm::mat4 transform = _getTransformMatrix(gltfNode);
-		std::string name = gltfNode.name.c_str();
+	for (const fastgltf::Node &node : asset.nodes) {
+		glm::mat4 transform = _getTransformMatrix(node);
+		std::string name = node.name.c_str();
 
-		const fastgltf::Optional<size_t> &meshIndex = gltfNode.meshIndex;
+		const fastgltf::Optional<size_t> &meshIndex = node.meshIndex;
 		if (meshIndex.has_value()) {
 			MeshInstance meshInstance = {
 				transform,
-				gltfNode.meshIndex.value(),
+				node.meshIndex.value(),
 				name,
 			};
 
-			meshInstances.push_back(meshInstance);
+			scene.meshInstances.push_back(meshInstance);
 		}
 
-		const fastgltf::Optional<size_t> &lightIndex = gltfNode.lightIndex;
+		const fastgltf::Optional<size_t> &lightIndex = node.lightIndex;
 		if (lightIndex.has_value()) {
-			fastgltf::Light gltfLight = pAsset->lights[lightIndex.value()];
+			fastgltf::Light light = asset.lights[lightIndex.value()];
 
 			LightType lightType = LightType::Point;
-			glm::vec3 color = glm::make_vec3(gltfLight.color.data());
-			float intensity = gltfLight.intensity;
+			glm::vec3 color = glm::make_vec3(light.color.data());
+			float intensity = light.intensity;
 
 			std::optional<float> range = {};
 
-			if (gltfLight.type == fastgltf::LightType::Point) {
-				if (gltfLight.range.has_value())
-					range = gltfLight.range.value();
+			if (light.type == fastgltf::LightType::Point) {
+				if (light.range.has_value())
+					range = light.range.value();
 
 				intensity *= STERADIAN / 1000.0f;
 				lightType = LightType::Point;
-			} else if (gltfLight.type == fastgltf::LightType::Directional) {
+			} else if (light.type == fastgltf::LightType::Directional) {
 				lightType = LightType::Directional;
 			} else {
 				continue;
 			}
 
-			Light light = {
+			Light _light = {
 				transform,
 				lightType,
 				color,
@@ -333,15 +372,9 @@ std::optional<Scene> Loader::loadGltf(const std::filesystem::path &path) {
 				name,
 			};
 
-			lights.push_back(light);
+			scene.lights.push_back(_light);
 		}
 	}
 
-	return Scene{
-		images,
-		materials,
-		meshes,
-		meshInstances,
-		lights,
-	};
+	return scene;
 }

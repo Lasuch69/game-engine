@@ -9,7 +9,7 @@
 class ImageLoader {
 public:
 	static Image *loadFromFile(const std::filesystem::path &path);
-	static Image *loadFromMemory(const std::vector<uint8_t> bytes);
+	static Image *loadFromMemory(const std::vector<uint8_t> &bytes);
 
 	static Image *loadHDRFromFile(const std::filesystem::path &path);
 	static Image *loadEXRFromFile(const std::filesystem::path &path);

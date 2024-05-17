@@ -7,12 +7,7 @@
 #include "scene.h"
 
 bool Scene::load(const std::filesystem::path &path) {
-	std::optional<Loader::Scene> result = Loader::loadGltf(path);
-
-	if (!result.has_value())
-		return false;
-
-	Loader::Scene scene = result.value();
+	Loader::Scene scene = Loader::loadGltf(path);
 
 	for (const Loader::Material &sceneMaterial : scene.materials) {
 		RS::MaterialInfo info;

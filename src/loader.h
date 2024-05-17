@@ -62,7 +62,7 @@ struct Scene {
 	std::vector<Light> lights;
 };
 
-std::optional<Scene> loadGltf(const std::filesystem::path &path);
+Scene loadGltf(const std::filesystem::path &path);
 
 } // namespace Loader
 

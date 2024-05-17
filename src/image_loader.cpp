@@ -41,7 +41,7 @@ Image *_loadFromFile(const std::filesystem::path &path) {
 	return new Image(width, height, asFormat(channels), data);
 }
 
-Image *_loadFromMemory(const std::vector<uint8_t> bytes) {
+Image *_loadFromMemory(const std::vector<uint8_t> &bytes) {
 	int width, height, channels;
 	stbi_uc *pData = stbi_load_from_memory(
 			bytes.data(), bytes.size(), &width, &height, &channels, STBI_default);
@@ -222,7 +222,7 @@ Image *ImageLoader::loadFromFile(const std::filesystem::path &path) {
 	return _loadFromFile(path);
 }
 
-Image *ImageLoader::loadFromMemory(const std::vector<uint8_t> bytes) {
+Image *ImageLoader::loadFromMemory(const std::vector<uint8_t> &bytes) {
 	return _loadFromMemory(bytes);
 }
 

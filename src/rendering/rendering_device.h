@@ -27,6 +27,11 @@ struct MeshPushConstants {
 	glm::mat4 model;
 };
 
+struct TonemapParameterConstants {
+	float exposure;
+	float white;
+};
+
 struct TextureRD {
 	AllocatedImage image;
 	vk::ImageView imageView;
@@ -73,6 +78,9 @@ private:
 	vk::Pipeline _tonemapPipeline;
 
 	std::optional<uint32_t> _imageIndex;
+
+	float _exposure = 1.25f;
+	float _white = 8.0f;
 
 	vk::CommandBuffer _beginSingleTimeCommands();
 	void _endSingleTimeCommands(vk::CommandBuffer commandBuffer);
@@ -123,6 +131,9 @@ public:
 
 	vk::DescriptorPool getDescriptorPool() const;
 	vk::DescriptorSetLayout getTextureLayout() const;
+
+	void setExposure(float exposure);
+	void setWhite(float white);
 
 	vk::CommandBuffer drawBegin();
 	void drawEnd(vk::CommandBuffer commandBuffer);

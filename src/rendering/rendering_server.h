@@ -121,6 +121,9 @@ public:
 	Material materialCreate(const MaterialInfo &info);
 	void materialFree(Material material);
 
+	void setExposure(float exposure);
+	void setWhite(float white);
+
 	void draw();
 
 	vk::Instance getVkInstance() const;

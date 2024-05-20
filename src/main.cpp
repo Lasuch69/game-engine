@@ -194,6 +194,17 @@ int main(int argc, char *argv[]) {
 				}
 			}
 
+			if (ImGui::CollapsingHeader("Tonemapping", ImGuiTreeNodeFlags_DefaultOpen)) {
+				static float exposure = 1.25f;
+				static float white = 8.0f;
+
+				ImGui::DragFloat("Exposure", &exposure, 0.01f, 0.0f, 10.0f, "%.2f");
+				ImGui::DragFloat("White", &white, 0.01f, 0.0f, 16.0f, "%.2f");
+
+				RS::getInstance().setExposure(exposure);
+				RS::getInstance().setWhite(white);
+			}
+
 			if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 				static int currentItem = 0;
 

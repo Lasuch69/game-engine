@@ -264,6 +264,14 @@ void RS::materialFree(Material material) {
 	_materials.remove(material);
 }
 
+void RS::setExposure(float exposure) {
+	_pDevice->setExposure(exposure);
+}
+
+void RS::setWhite(float white) {
+	_pDevice->setWhite(white);
+}
+
 void RenderingServer::draw() {
 	_pDevice->updateUniformBuffer(_camera.transform[3]);
 

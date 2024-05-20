@@ -528,6 +528,14 @@ vk::DescriptorSetLayout RD::getTextureLayout() const {
 	return _textureLayout;
 }
 
+void RD::setExposure(float exposure) {
+	_exposure = exposure;
+}
+
+void RD::setWhite(float white) {
+	_white = white;
+}
+
 vk::CommandBuffer RD::drawBegin() {
 	vk::CommandBuffer commandBuffer = _commandBuffers[_frame];
 
@@ -605,9 +613,15 @@ void RD::drawEnd(vk::CommandBuffer commandBuffer) {
 	// tonemapping
 
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _tonemapPipeline);
-
 	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, _tonemapLayout, 0, 1,
 			&_inputAttachmentSet, 0, nullptr);
+
+	TonemapParameterConstants constants{};
+	constants.exposure = _exposure;
+	constants.white = _white;
+
+	commandBuffer.pushConstants(
+			_tonemapLayout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(constants), &constants);
 
 	commandBuffer.draw(3, 1, 0, 0);
 
@@ -912,8 +926,14 @@ void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		codeSize = sizeof(shader.fragmentCode);
 		vk::ShaderModule fragmentStage = createShaderModule(device, shader.fragmentCode, codeSize);
 
+		vk::PushConstantRange pushConstant;
+		pushConstant.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+		pushConstant.setOffset(0);
+		pushConstant.setSize(sizeof(TonemapParameterConstants));
+
 		vk::PipelineLayoutCreateInfo createInfo;
 		createInfo.setSetLayouts(_inputAttachmentLayout);
+		createInfo.setPushConstantRanges(pushConstant);
 
 		_tonemapLayout = device.createPipelineLayout(createInfo);
 		_tonemapPipeline = createPipeline(device, vertexStage, fragmentStage, _tonemapLayout,

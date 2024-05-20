@@ -1,13 +1,15 @@
 #version 450
 
+layout(push_constant) uniform TonemapParameterConstants {
+	float exposure;
+	float white;
+};
+
 layout(set = 0, binding = 0, input_attachment_index = 0) uniform subpassInput inputColor;
 
 layout(location = 0) out vec4 fragColor;
 
-const float blackPoint = 0.00017578;
-const float whitePoint = 16.2917;
-
-const float exposure = 1.0f;
+const float black = 0.00017578;
 
 // AgX Begin
 
@@ -61,8 +63,8 @@ vec3 agx(vec3 val) {
 	);
 
 
-	const float min_ev = log2(blackPoint);
-	const float max_ev = log2(whitePoint);
+	const float min_ev = log2(black);
+	const float max_ev = log2(white);
 
 	// Input transform (inset)
 	val = agx_mat * val;

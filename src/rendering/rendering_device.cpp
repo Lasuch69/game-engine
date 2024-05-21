@@ -965,7 +965,7 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		vk::ShaderModule fragmentStage = createShaderModule(device, shader.fragmentCode, codeSize);
 
 		vk::PushConstantRange pushConstant;
-		pushConstant.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+		pushConstant.setStageFlags(vk::ShaderStageFlagBits::eFragment);
 		pushConstant.setOffset(0);
 		pushConstant.setSize(sizeof(TonemapParameterConstants));
 

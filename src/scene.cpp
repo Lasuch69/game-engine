@@ -2,8 +2,9 @@
 #include <filesystem>
 #include <optional>
 
-#include "loader.h"
+#include "rendering/rendering_server.h"
 
+#include "loader.h"
 #include "scene.h"
 
 bool Scene::load(const std::filesystem::path &path) {
@@ -16,7 +17,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (albedoIndex.has_value()) {
 			std::shared_ptr<Image> albedoMap = scene.images[albedoIndex.value()];
 
-			Texture t = RS::getInstance().textureCreate(albedoMap);
+			ObjectID t = RS::getInstance().textureCreate(albedoMap);
 			_textures.push_back(t);
 
 			info.albedo = t;
@@ -26,7 +27,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (normalIndex.has_value()) {
 			std::shared_ptr<Image> normalMap = scene.images[normalIndex.value()];
 
-			Texture t = RS::getInstance().textureCreate(normalMap);
+			ObjectID t = RS::getInstance().textureCreate(normalMap);
 			_textures.push_back(t);
 
 			info.normal = t;
@@ -36,7 +37,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (metallicIndex.has_value()) {
 			std::shared_ptr<Image> metallicMap = scene.images[metallicIndex.value()];
 
-			Texture t = RS::getInstance().textureCreate(metallicMap);
+			ObjectID t = RS::getInstance().textureCreate(metallicMap);
 			_textures.push_back(t);
 
 			info.metallic = t;
@@ -46,13 +47,13 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (roughnessIndex.has_value()) {
 			std::shared_ptr<Image> roughnessMap = scene.images[roughnessIndex.value()];
 
-			Texture t = RS::getInstance().textureCreate(roughnessMap);
+			ObjectID t = RS::getInstance().textureCreate(roughnessMap);
 			_textures.push_back(t);
 
 			info.roughness = t;
 		}
 
-		Material material = RS::getInstance().materialCreate(info);
+		ObjectID material = RS::getInstance().materialCreate(info);
 		_materials.push_back(material);
 	}
 
@@ -60,7 +61,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		std::vector<RS::Primitive> primitives;
 		for (const Loader::Primitive &meshPrimitive : sceneMesh.primitives) {
 			uint64_t materialIndex = meshPrimitive.materialIndex;
-			Material material = _materials[materialIndex];
+			ObjectID material = _materials[materialIndex];
 
 			RS::Primitive primitive = {};
 			primitive.vertices = meshPrimitive.vertices;
@@ -70,17 +71,17 @@ bool Scene::load(const std::filesystem::path &path) {
 			primitives.push_back(primitive);
 		}
 
-		Mesh mesh = RS::getInstance().meshCreate(primitives);
+		ObjectID mesh = RS::getInstance().meshCreate(primitives);
 		_meshes.push_back(mesh);
 	}
 
 	for (const Loader::MeshInstance &sceneMeshInstance : scene.meshInstances) {
 		uint64_t meshIndex = sceneMeshInstance.meshIndex;
 
-		Mesh mesh = _meshes[meshIndex];
+		ObjectID mesh = _meshes[meshIndex];
 		glm::mat4 transform = sceneMeshInstance.transform;
 
-		MeshInstance meshInstance = RS::getInstance().meshInstanceCreate();
+		ObjectID meshInstance = RS::getInstance().meshInstanceCreate();
 		RS::getInstance().meshInstanceSetMesh(meshInstance, mesh);
 		RS::getInstance().meshInstanceSetTransform(meshInstance, transform);
 
@@ -94,7 +95,7 @@ bool Scene::load(const std::filesystem::path &path) {
 			glm::vec3 color = sceneLight.color;
 			float intensity = sceneLight.intensity;
 
-			PointLight pointLight = RS::getInstance().pointLightCreate();
+			ObjectID pointLight = RS::getInstance().pointLightCreate();
 			RS::getInstance().pointLightSetPosition(pointLight, position);
 			RS::getInstance().pointLightSetRange(pointLight, range);
 			RS::getInstance().pointLightSetColor(pointLight, color);
@@ -113,7 +114,7 @@ bool Scene::load(const std::filesystem::path &path) {
 			glm::vec3 color = sceneLight.color;
 			float intensity = sceneLight.intensity;
 
-			DirectionalLight directionalLight = RS::getInstance().directionalLightCreate();
+			ObjectID directionalLight = RS::getInstance().directionalLightCreate();
 			RS::getInstance().directionalLightSetDirection(directionalLight, direction);
 			RS::getInstance().directionalLightSetIntensity(directionalLight, intensity);
 			RS::getInstance().directionalLightSetColor(directionalLight, color);
@@ -128,22 +129,22 @@ bool Scene::load(const std::filesystem::path &path) {
 }
 
 void Scene::clear() {
-	for (MeshInstance meshInstance : _meshInstances)
+	for (ObjectID meshInstance : _meshInstances)
 		RS::getInstance().meshInstanceFree(meshInstance);
 
-	for (DirectionalLight directionalLight : _directionalLights)
+	for (ObjectID directionalLight : _directionalLights)
 		RS::getInstance().directionalLightFree(directionalLight);
 
-	for (PointLight pointLight : _pointLights)
+	for (ObjectID pointLight : _pointLights)
 		RS::getInstance().pointLightFree(pointLight);
 
-	for (Mesh mesh : _meshes)
+	for (ObjectID mesh : _meshes)
 		RS::getInstance().meshFree(mesh);
 
-	for (Material material : _materials)
+	for (ObjectID material : _materials)
 		RS::getInstance().materialFree(material);
 
-	for (Texture texture : _textures)
+	for (ObjectID texture : _textures)
 		RS::getInstance().textureFree(texture);
 
 	_meshInstances.clear();

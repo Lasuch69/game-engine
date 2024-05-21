@@ -3,14 +3,11 @@
 
 #include <glm/glm.hpp>
 
-#include "../../rid_owner.h"
+#include "../object_owner.h"
 #include "../types/allocated.h"
 
 const uint32_t MAX_DIRECTIONAL_LIGHT_COUNT = 8;
 const uint32_t MAX_POINT_LIGHT_COUNT = 2048;
-
-typedef uint64_t DirectionalLight;
-typedef uint64_t PointLight;
 
 class LightStorage {
 	struct DirectionalLightRD {
@@ -35,8 +32,8 @@ class LightStorage {
 	AllocatedBuffer _pointLightBuffer;
 	VmaAllocationInfo _pointLightAllocInfo;
 
-	RIDOwner<DirectionalLightRD> _directionalLights;
-	RIDOwner<PointLightRD> _pointLights;
+	ObjectOwner<DirectionalLightRD> _directionalLights;
+	ObjectOwner<PointLightRD> _pointLights;
 
 	vk::DescriptorSetLayout _lightSetLayout;
 	vk::DescriptorSet _lightSet;
@@ -44,19 +41,18 @@ class LightStorage {
 	bool _initialized = false;
 
 public:
-	DirectionalLight directionalLightCreate();
-	void directionalLightSetDirection(
-			DirectionalLight directionalLight, const glm::vec3 &direction);
-	void directionalLightSetIntensity(DirectionalLight directionalLight, float intensity);
-	void directionalLightSetColor(DirectionalLight directionalLight, const glm::vec3 &color);
-	void directionalLightFree(DirectionalLight directionalLight);
+	ObjectID directionalLightCreate();
+	void directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction);
+	void directionalLightSetIntensity(ObjectID directionalLight, float intensity);
+	void directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color);
+	void directionalLightFree(ObjectID directionalLight);
 
-	PointLight pointLightCreate();
-	void pointLightSetPosition(PointLight pointLight, const glm::vec3 &position);
-	void pointLightSetRange(PointLight pointLight, float range);
-	void pointLightSetColor(PointLight pointLight, const glm::vec3 &color);
-	void pointLightSetIntensity(PointLight pointLight, float intensity);
-	void pointLightFree(PointLight pointLight);
+	ObjectID pointLightCreate();
+	void pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position);
+	void pointLightSetRange(ObjectID pointLight, float range);
+	void pointLightSetColor(ObjectID pointLight, const glm::vec3 &color);
+	void pointLightSetIntensity(ObjectID pointLight, float intensity);
+	void pointLightFree(ObjectID pointLight);
 
 	uint32_t getDirectionalLightCount() const;
 	uint32_t getPointLightCount() const;

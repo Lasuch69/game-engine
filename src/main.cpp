@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
 				ImGui::ColorEdit3("Color", color);
 				ImGui::DragFloat("Intensity", &intensity, 0.05f, 0.0f, 128.0f, "%.2f");
 
-				static DirectionalLight sun;
+				static ObjectID sun;
 
 				if (toggled) {
 					if (enabled) {

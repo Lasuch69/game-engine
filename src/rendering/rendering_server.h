@@ -8,18 +8,14 @@
 #include <glm/glm.hpp>
 
 #include "../image.h"
-#include "../rid_owner.h"
+
+#include "object_owner.h"
 
 #include "types/allocated.h"
 #include "types/camera.h"
 #include "types/vertex.h"
 
 #include "rendering_device.h"
-
-typedef uint64_t Mesh;
-typedef uint64_t MeshInstance;
-typedef uint64_t Texture;
-typedef uint64_t Material;
 
 #define NULL_HANDLE 0
 
@@ -37,21 +33,21 @@ public:
 	struct Primitive {
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		Material material;
+		ObjectID material;
 	};
 
 	struct MaterialInfo {
-		Texture albedo;
-		Texture normal;
-		Texture metallic;
-		Texture roughness;
+		ObjectID albedo;
+		ObjectID normal;
+		ObjectID metallic;
+		ObjectID roughness;
 	};
 
 private:
 	struct PrimitiveRD {
 		uint32_t indexCount;
 		uint32_t firstIndex;
-		Material material;
+		ObjectID material;
 	};
 
 	struct MeshRD {
@@ -62,7 +58,7 @@ private:
 
 	struct MeshInstanceRD {
 		glm::mat4 transform;
-		Mesh mesh;
+		ObjectID mesh;
 	};
 
 	struct MaterialRD {
@@ -79,10 +75,10 @@ private:
 	TextureRD _roughnessFallback;
 
 	Camera _camera;
-	RIDOwner<MeshRD> _meshes;
-	RIDOwner<MeshInstanceRD> _meshInstances;
-	RIDOwner<TextureRD> _textures;
-	RIDOwner<MaterialRD> _materials;
+	ObjectOwner<MeshRD> _meshes;
+	ObjectOwner<MeshInstanceRD> _meshInstances;
+	ObjectOwner<TextureRD> _textures;
+	ObjectOwner<MaterialRD> _materials;
 
 public:
 	RenderingServer(RenderingServer const &) = delete;
@@ -93,33 +89,32 @@ public:
 	void cameraSetZNear(float zNear);
 	void cameraSetZFar(float zFar);
 
-	Mesh meshCreate(const std::vector<Primitive> &primitives);
-	void meshFree(Mesh mesh);
+	ObjectID meshCreate(const std::vector<Primitive> &primitives);
+	void meshFree(ObjectID mesh);
 
-	Mesh meshInstanceCreate();
-	void meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh);
-	void meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform);
-	void meshInstanceFree(MeshInstance meshInstance);
+	ObjectID meshInstanceCreate();
+	void meshInstanceSetMesh(ObjectID meshInstance, ObjectID mesh);
+	void meshInstanceSetTransform(ObjectID meshInstance, const glm::mat4 &transform);
+	void meshInstanceFree(ObjectID meshInstance);
 
-	DirectionalLight directionalLightCreate();
-	void directionalLightSetDirection(
-			DirectionalLight directionalLight, const glm::vec3 &direction);
-	void directionalLightSetIntensity(DirectionalLight directionalLight, float intensity);
-	void directionalLightSetColor(DirectionalLight directionalLight, const glm::vec3 &color);
-	void directionalLightFree(DirectionalLight directionalLight);
+	ObjectID directionalLightCreate();
+	void directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction);
+	void directionalLightSetIntensity(ObjectID directionalLight, float intensity);
+	void directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color);
+	void directionalLightFree(ObjectID directionalLight);
 
-	PointLight pointLightCreate();
-	void pointLightSetPosition(PointLight pointLight, const glm::vec3 &position);
-	void pointLightSetRange(PointLight pointLight, float range);
-	void pointLightSetColor(PointLight pointLight, const glm::vec3 &color);
-	void pointLightSetIntensity(PointLight pointLight, float intensity);
-	void pointLightFree(PointLight pointLight);
+	ObjectID pointLightCreate();
+	void pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position);
+	void pointLightSetRange(ObjectID pointLight, float range);
+	void pointLightSetColor(ObjectID pointLight, const glm::vec3 &color);
+	void pointLightSetIntensity(ObjectID pointLight, float intensity);
+	void pointLightFree(ObjectID pointLight);
 
-	Texture textureCreate(const std::shared_ptr<Image> image);
-	void textureFree(Texture texture);
+	ObjectID textureCreate(const std::shared_ptr<Image> image);
+	void textureFree(ObjectID texture);
 
-	Material materialCreate(const MaterialInfo &info);
-	void materialFree(Material material);
+	ObjectID materialCreate(const MaterialInfo &info);
+	void materialFree(ObjectID material);
 
 	void setExposure(float exposure);
 	void setWhite(float white);

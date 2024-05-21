@@ -11,58 +11,56 @@
 		return;                                                                                    \
 	}
 
-DirectionalLight LightStorage::directionalLightCreate() {
+ObjectID LightStorage::directionalLightCreate() {
 	return _directionalLights.insert({});
 }
 
 void LightStorage::directionalLightSetDirection(
-		DirectionalLight directionalLight, const glm::vec3 &direction) {
+		ObjectID directionalLight, const glm::vec3 &direction) {
 	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
 	_directionalLights[directionalLight].direction = direction;
 }
 
-void LightStorage::directionalLightSetColor(
-		DirectionalLight directionalLight, const glm::vec3 &color) {
+void LightStorage::directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color) {
 	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
 	_directionalLights[directionalLight].color = color;
 }
 
-void LightStorage::directionalLightSetIntensity(
-		DirectionalLight directionalLight, float intensity) {
+void LightStorage::directionalLightSetIntensity(ObjectID directionalLight, float intensity) {
 	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
 	_directionalLights[directionalLight].intensity = intensity;
 }
 
-void LightStorage::directionalLightFree(DirectionalLight directionalLight) {
-	_directionalLights.remove(directionalLight);
+void LightStorage::directionalLightFree(ObjectID directionalLight) {
+	_directionalLights.free(directionalLight);
 }
 
-PointLight LightStorage::pointLightCreate() {
+ObjectID LightStorage::pointLightCreate() {
 	return _pointLights.insert({});
 }
 
-void LightStorage::pointLightSetPosition(PointLight pointLight, const glm::vec3 &position) {
+void LightStorage::pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].position = position;
 }
 
-void LightStorage::pointLightSetRange(PointLight pointLight, float range) {
+void LightStorage::pointLightSetRange(ObjectID pointLight, float range) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].range = range;
 }
 
-void LightStorage::pointLightSetColor(PointLight pointLight, const glm::vec3 &color) {
+void LightStorage::pointLightSetColor(ObjectID pointLight, const glm::vec3 &color) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].color = color;
 }
 
-void LightStorage::pointLightSetIntensity(PointLight pointLight, float intensity) {
+void LightStorage::pointLightSetIntensity(ObjectID pointLight, float intensity) {
 	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
 	_pointLights[pointLight].intensity = intensity;
 }
 
-void LightStorage::pointLightFree(PointLight pointLight) {
-	_pointLights.remove(pointLight);
+void LightStorage::pointLightFree(ObjectID pointLight) {
+	_pointLights.free(pointLight);
 }
 
 uint32_t LightStorage::getDirectionalLightCount() const {

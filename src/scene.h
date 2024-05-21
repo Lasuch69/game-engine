@@ -1,21 +1,22 @@
 #ifndef SCENE_H
 #define SCENE_H
 
+#include <cstdint>
 #include <filesystem>
 #include <vector>
 
-#include "rendering/rendering_server.h"
+typedef uint64_t ObjectID;
 
 class Scene {
 private:
-	std::vector<Texture> _textures;
-	std::vector<Material> _materials;
+	std::vector<ObjectID> _textures;
+	std::vector<ObjectID> _materials;
 
-	std::vector<Mesh> _meshes;
-	std::vector<MeshInstance> _meshInstances;
+	std::vector<ObjectID> _meshes;
+	std::vector<ObjectID> _meshInstances;
 
-	std::vector<DirectionalLight> _directionalLights;
-	std::vector<PointLight> _pointLights;
+	std::vector<ObjectID> _directionalLights;
+	std::vector<ObjectID> _pointLights;
 
 public:
 	bool load(const std::filesystem::path &path);

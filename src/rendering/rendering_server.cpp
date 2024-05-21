@@ -1,7 +1,6 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
-#include <optional>
 
 #include <SDL2/SDL_vulkan.h>
 
@@ -32,7 +31,7 @@ void RS::cameraSetZFar(float zFar) {
 	_camera.zFar = zFar;
 }
 
-Mesh RS::meshCreate(const std::vector<Primitive> &primitives) {
+ObjectID RS::meshCreate(const std::vector<Primitive> &primitives) {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 
@@ -57,7 +56,7 @@ Mesh RS::meshCreate(const std::vector<Primitive> &primitives) {
 	for (const Primitive &primitive : primitives) {
 		uint32_t indexCount = static_cast<uint32_t>(primitive.indices.size());
 		uint32_t firstIndex = indexOffset;
-		Material material = primitive.material;
+		ObjectID material = primitive.material;
 
 		_primitives.push_back({
 				indexCount,
@@ -100,84 +99,76 @@ Mesh RS::meshCreate(const std::vector<Primitive> &primitives) {
 	});
 }
 
-void RS::meshFree(Mesh mesh) {
-	std::optional<MeshRD> result = _meshes.remove(mesh);
-
-	if (!result.has_value())
-		return;
-
-	MeshRD _mesh = result.value();
-	_pDevice->bufferDestroy(_mesh.vertexBuffer);
-	_pDevice->bufferDestroy(_mesh.indexBuffer);
+void RS::meshFree(ObjectID mesh) {
+	_meshes.free(mesh);
 }
 
-MeshInstance RenderingServer::meshInstanceCreate() {
+ObjectID RenderingServer::meshInstanceCreate() {
 	return _meshInstances.insert({});
 }
 
-void RS::meshInstanceSetMesh(MeshInstance meshInstance, Mesh mesh) {
+void RS::meshInstanceSetMesh(ObjectID meshInstance, ObjectID mesh) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 	CHECK_IF_VALID(_meshes, mesh, "Mesh")
 
 	_meshInstances[meshInstance].mesh = mesh;
 }
 
-void RS::meshInstanceSetTransform(MeshInstance meshInstance, const glm::mat4 &transform) {
+void RS::meshInstanceSetTransform(ObjectID meshInstance, const glm::mat4 &transform) {
 	CHECK_IF_VALID(_meshInstances, meshInstance, "MeshInstance");
 
 	_meshInstances[meshInstance].transform = transform;
 }
 
-void RS::meshInstanceFree(MeshInstance meshInstance) {
-	_meshInstances.remove(meshInstance);
+void RS::meshInstanceFree(ObjectID meshInstance) {
+	_meshInstances.free(meshInstance);
 }
 
-DirectionalLight RS::directionalLightCreate() {
+ObjectID RS::directionalLightCreate() {
 	return _pDevice->getLightStorage().directionalLightCreate();
 }
 
-void RS::directionalLightSetDirection(
-		DirectionalLight directionalLight, const glm::vec3 &direction) {
+void RS::directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction) {
 	_pDevice->getLightStorage().directionalLightSetDirection(directionalLight, direction);
 }
 
-void RS::directionalLightSetIntensity(DirectionalLight directionalLight, float intensity) {
+void RS::directionalLightSetIntensity(ObjectID directionalLight, float intensity) {
 	_pDevice->getLightStorage().directionalLightSetIntensity(directionalLight, intensity);
 }
 
-void RS::directionalLightSetColor(DirectionalLight directionalLight, const glm::vec3 &color) {
+void RS::directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color) {
 	_pDevice->getLightStorage().directionalLightSetColor(directionalLight, color);
 }
 
-void RS::directionalLightFree(DirectionalLight directionalLight) {
+void RS::directionalLightFree(ObjectID directionalLight) {
 	_pDevice->getLightStorage().directionalLightFree(directionalLight);
 }
 
-PointLight RenderingServer::pointLightCreate() {
+ObjectID RenderingServer::pointLightCreate() {
 	return _pDevice->getLightStorage().pointLightCreate();
 }
 
-void RS::pointLightSetPosition(PointLight pointLight, const glm::vec3 &position) {
+void RS::pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position) {
 	_pDevice->getLightStorage().pointLightSetPosition(pointLight, position);
 }
 
-void RS::pointLightSetRange(PointLight pointLight, float range) {
+void RS::pointLightSetRange(ObjectID pointLight, float range) {
 	_pDevice->getLightStorage().pointLightSetRange(pointLight, range);
 }
 
-void RS::pointLightSetColor(PointLight pointLight, const glm::vec3 &color) {
+void RS::pointLightSetColor(ObjectID pointLight, const glm::vec3 &color) {
 	_pDevice->getLightStorage().pointLightSetColor(pointLight, color);
 }
 
-void RS::pointLightSetIntensity(PointLight pointLight, float intensity) {
+void RS::pointLightSetIntensity(ObjectID pointLight, float intensity) {
 	_pDevice->getLightStorage().pointLightSetIntensity(pointLight, intensity);
 }
 
-void RS::pointLightFree(PointLight pointLight) {
+void RS::pointLightFree(ObjectID pointLight) {
 	_pDevice->getLightStorage().pointLightFree(pointLight);
 }
 
-Texture RS::textureCreate(const std::shared_ptr<Image> image) {
+ObjectID RS::textureCreate(const std::shared_ptr<Image> image) {
 	if (image == nullptr)
 		return NULL_HANDLE;
 
@@ -185,16 +176,11 @@ Texture RS::textureCreate(const std::shared_ptr<Image> image) {
 	return _textures.insert(_texture);
 }
 
-void RS::textureFree(Texture texture) {
-	std::optional<TextureRD> _texture = _textures.remove(texture);
-
-	if (!_texture.has_value())
-		return;
-
-	_pDevice->textureDestroy(_texture.value());
+void RS::textureFree(ObjectID texture) {
+	_textures.free(texture);
 }
 
-Material RS::materialCreate(const MaterialInfo &info) {
+ObjectID RS::materialCreate(const MaterialInfo &info) {
 	TextureRD albedo = _textures.get_id_or_else(info.albedo, _albedoFallback);
 	TextureRD normal = _textures.get_id_or_else(info.normal, _normalFallback);
 	TextureRD metallic = _textures.get_id_or_else(info.metallic, _metallicFallback);
@@ -260,8 +246,8 @@ Material RS::materialCreate(const MaterialInfo &info) {
 	return _materials.insert({ textureSet });
 }
 
-void RS::materialFree(Material material) {
-	_materials.remove(material);
+void RS::materialFree(ObjectID material) {
+	_materials.free(material);
 }
 
 void RS::setExposure(float exposure) {

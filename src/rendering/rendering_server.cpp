@@ -3,8 +3,9 @@
 #include <memory>
 
 #include <SDL2/SDL_vulkan.h>
-
 #include <glm/glm.hpp>
+
+#include "../image.h"
 
 #include "rendering_device.h"
 #include "rendering_server.h"
@@ -78,19 +79,21 @@ ObjectID RS::meshCreate(const std::vector<Primitive> &primitives) {
 		vertexOffset += vertexCount;
 	}
 
+	RD &rd = RD::getSingleton();
+
 	vk::DeviceSize vertexBufferSize = sizeof(Vertex) * vertices.size();
-	AllocatedBuffer vertexBuffer = _pDevice->bufferCreate(
+	AllocatedBuffer vertexBuffer = rd.bufferCreate(
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vertexBufferSize);
 
-	_pDevice->bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexBufferSize);
+	rd.bufferSend(vertexBuffer.buffer, (uint8_t *)vertices.data(), (size_t)vertexBufferSize);
 
 	vk::DeviceSize indexBufferSize = sizeof(uint32_t) * indices.size();
-	AllocatedBuffer indexBuffer = _pDevice->bufferCreate(
+	AllocatedBuffer indexBuffer = rd.bufferCreate(
 			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			indexBufferSize);
 
-	_pDevice->bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexBufferSize);
+	rd.bufferSend(indexBuffer.buffer, (uint8_t *)indices.data(), (size_t)indexBufferSize);
 
 	return _meshes.insert({
 			vertexBuffer,
@@ -125,34 +128,34 @@ void RS::meshInstanceFree(ObjectID meshInstance) {
 }
 
 ObjectID RS::lightCreate(LightType type) {
-	return _pDevice->getLightStorage().lightCreate(type);
+	return RD::getSingleton().getLightStorage().lightCreate(type);
 }
 
 void RS::lightSetTransform(ObjectID light, const glm::mat4 &transform) {
-	_pDevice->getLightStorage().lightSetTransform(light, transform);
+	RD::getSingleton().getLightStorage().lightSetTransform(light, transform);
 }
 
 void RS::lightSetRange(ObjectID light, float range) {
-	_pDevice->getLightStorage().lightSetRange(light, range);
+	RD::getSingleton().getLightStorage().lightSetRange(light, range);
 }
 
 void RS::lightSetColor(ObjectID light, const glm::vec3 &color) {
-	_pDevice->getLightStorage().lightSetColor(light, color);
+	RD::getSingleton().getLightStorage().lightSetColor(light, color);
 }
 
 void RS::lightSetIntensity(ObjectID light, float intensity) {
-	_pDevice->getLightStorage().lightSetIntensity(light, intensity);
+	RD::getSingleton().getLightStorage().lightSetIntensity(light, intensity);
 }
 
 void RS::lightFree(ObjectID light) {
-	_pDevice->getLightStorage().lightFree(light);
+	RD::getSingleton().getLightStorage().lightFree(light);
 }
 
 ObjectID RS::textureCreate(const std::shared_ptr<Image> image) {
 	if (image == nullptr)
 		return NULL_HANDLE;
 
-	TextureRD _texture = _pDevice->textureCreate(image);
+	TextureRD _texture = RD::getSingleton().textureCreate(image);
 	return _textures.insert(_texture);
 }
 
@@ -165,6 +168,10 @@ ObjectID RS::materialCreate(const MaterialInfo &info) {
 	TextureRD normal = _textures.get_id_or_else(info.normal, _normalFallback);
 	TextureRD metallic = _textures.get_id_or_else(info.metallic, _metallicFallback);
 	TextureRD roughness = _textures.get_id_or_else(info.roughness, _roughnessFallback);
+
+	RD &rd = RD::getSingleton();
+	vk::Device device = rd.getDevice();
+	vk::DescriptorPool descriptorPool = rd.getDescriptorPool();
 
 	std::array<vk::DescriptorImageInfo, 4> imageInfos = {};
 	imageInfos[0].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
@@ -183,14 +190,14 @@ ObjectID RS::materialCreate(const MaterialInfo &info) {
 	imageInfos[3].setImageView(roughness.imageView);
 	imageInfos[3].setSampler(roughness.sampler);
 
-	vk::DescriptorSetLayout textureLayout = _pDevice->getTextureLayout();
+	vk::DescriptorSetLayout textureLayout = rd.getTextureLayout();
 
 	vk::DescriptorSetAllocateInfo allocInfo = {};
-	allocInfo.setDescriptorPool(_pDevice->getDescriptorPool());
+	allocInfo.setDescriptorPool(descriptorPool);
 	allocInfo.setDescriptorSetCount(1);
 	allocInfo.setSetLayouts(textureLayout);
 
-	VkDescriptorSet textureSet = _pDevice->getDevice().allocateDescriptorSets(allocInfo)[0];
+	VkDescriptorSet textureSet = device.allocateDescriptorSets(allocInfo)[0];
 
 	std::array<vk::WriteDescriptorSet, 4> writeInfos = {};
 	writeInfos[0].setDstSet(textureSet);
@@ -221,7 +228,7 @@ ObjectID RS::materialCreate(const MaterialInfo &info) {
 	writeInfos[3].setDescriptorCount(1);
 	writeInfos[3].setImageInfo(imageInfos[3]);
 
-	_pDevice->getDevice().updateDescriptorSets(writeInfos, nullptr);
+	device.updateDescriptorSets(writeInfos, nullptr);
 
 	return _materials.insert({ textureSet });
 }
@@ -231,27 +238,29 @@ void RS::materialFree(ObjectID material) {
 }
 
 void RS::setExposure(float exposure) {
-	_pDevice->setExposure(exposure);
+	RD::getSingleton().setExposure(exposure);
 }
 
 void RS::setWhite(float white) {
-	_pDevice->setWhite(white);
+	RD::getSingleton().setWhite(white);
 }
 
 void RenderingServer::draw() {
-	_pDevice->updateUniformBuffer(_camera.transform[3]);
+	RD &rd = RD::getSingleton();
+	rd.updateUniformBuffer(_camera.transform[3]);
 
-	float aspect = static_cast<float>(_width) / static_cast<float>(_height);
+	vk::Extent2D extent = rd.getSwapchainExtent();
+	float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 	glm::mat4 projView = _camera.projectionMatrix(aspect) * _camera.viewMatrix();
 
-	vk::CommandBuffer commandBuffer = _pDevice->drawBegin();
+	vk::CommandBuffer commandBuffer = rd.drawBegin();
 
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _pDevice->getDepthPipeline());
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getDepthPipeline());
 
 	for (const auto &[_, meshInstance] : _meshInstances.map()) {
 		const MeshRD &mesh = _meshes[meshInstance.mesh];
 
-		vk::PipelineLayout pipelineLayout = _pDevice->getDepthPipelineLayout();
+		vk::PipelineLayout pipelineLayout = rd.getDepthPipelineLayout();
 
 		vk::DeviceSize offset = 0;
 		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
@@ -271,15 +280,15 @@ void RenderingServer::draw() {
 
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _pDevice->getMaterialPipeline());
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getMaterialPipeline());
 
 	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-			_pDevice->getMaterialPipelineLayout(), 0, _pDevice->getMaterialSets(), nullptr);
+			rd.getMaterialPipelineLayout(), 0, rd.getMaterialSets(), nullptr);
 
 	for (const auto &[_, meshInstance] : _meshInstances.map()) {
 		const MeshRD &mesh = _meshes[meshInstance.mesh];
 
-		vk::PipelineLayout pipelineLayout = _pDevice->getMaterialPipelineLayout();
+		vk::PipelineLayout pipelineLayout = rd.getMaterialPipelineLayout();
 
 		vk::DeviceSize offset = 0;
 		commandBuffer.bindVertexBuffers(0, 1, &mesh.vertexBuffer.buffer, &offset);
@@ -301,53 +310,48 @@ void RenderingServer::draw() {
 		}
 	}
 
-	_pDevice->drawEnd(commandBuffer);
+	rd.drawEnd(commandBuffer);
 }
 
 vk::Instance RS::getVkInstance() const {
-	return _pDevice->getInstance();
+	return RD::getSingleton().getInstance();
 }
 
 void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
-	_pDevice->init(surface, width, height);
-
-	_width = width;
-	_height = height;
+	RD &rd = RD::getSingleton();
+	rd.windowInit(surface, width, height);
 
 	{
 		std::vector<uint8_t> data = { 255, 255, 255, 255 };
 		std::shared_ptr<Image> albedo(new Image(1, 1, Image::Format::RGBA8, data));
 
-		_albedoFallback = _pDevice->textureCreate(albedo);
+		_albedoFallback = rd.textureCreate(albedo);
 	}
 
 	{
 		std::vector<uint8_t> data = { 127, 127 };
 		std::shared_ptr<Image> normal(new Image(1, 1, Image::Format::RG8, data));
 
-		_normalFallback = _pDevice->textureCreate(normal);
+		_normalFallback = rd.textureCreate(normal);
 	}
 
 	{
 		std::vector<uint8_t> data = { 0 };
 		std::shared_ptr<Image> metallic(new Image(1, 1, Image::Format::R8, data));
 
-		_metallicFallback = _pDevice->textureCreate(metallic);
+		_metallicFallback = rd.textureCreate(metallic);
 	}
 
 	{
 		std::vector<uint8_t> data = { 127 };
 		std::shared_ptr<Image> roughness(new Image(1, 1, Image::Format::R8, data));
 
-		_roughnessFallback = _pDevice->textureCreate(roughness);
+		_roughnessFallback = rd.textureCreate(roughness);
 	}
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {
-	_pDevice->windowResize(width, height);
-
-	_width = width;
-	_height = height;
+	RD::getSingleton().windowResize(width, height);
 }
 
 std::vector<const char *> getRequiredExtensions() {
@@ -361,7 +365,7 @@ std::vector<const char *> getRequiredExtensions() {
 }
 
 void RS::initImGui() {
-	_pDevice->initImGui();
+	RD::getSingleton().initImGui();
 }
 
 void RS::initialize(int argc, char **argv) {
@@ -372,5 +376,6 @@ void RS::initialize(int argc, char **argv) {
 			useValidation = true;
 	}
 
-	_pDevice = new RenderingDevice(getRequiredExtensions(), useValidation);
+	std::vector<const char *> extensions = getRequiredExtensions();
+	RD::getSingleton().init(extensions, useValidation);
 }

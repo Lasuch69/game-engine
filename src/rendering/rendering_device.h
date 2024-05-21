@@ -9,8 +9,7 @@
 
 #include "storage/light_storage.h"
 #include "types/allocated.h"
-
-#include "../image.h"
+#include "types/resource.h"
 
 #include "vulkan_context.h"
 
@@ -32,16 +31,20 @@ struct TonemapParameterConstants {
 	float white;
 };
 
-struct TextureRD {
-	AllocatedImage image;
-	vk::ImageView imageView;
-	vk::Sampler sampler;
-};
+class Image;
 
 class RenderingDevice {
+public:
+	static RenderingDevice &getSingleton() {
+		static RenderingDevice instance;
+		return instance;
+	}
+
+private:
+	RenderingDevice() {}
+
 private:
 	VulkanContext *_pContext;
-
 	LightStorage _lightStorage;
 
 	uint32_t _frame = 0;
@@ -95,6 +98,9 @@ private:
 			vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels);
 
 public:
+	RenderingDevice(RenderingDevice const &) = delete;
+	void operator=(RenderingDevice const &) = delete;
+
 	AllocatedBuffer bufferCreate(
 			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
 	void bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
@@ -121,6 +127,8 @@ public:
 	vk::Instance getInstance() const;
 	vk::Device getDevice() const;
 
+	vk::Extent2D getSwapchainExtent() const;
+
 	vk::PipelineLayout getDepthPipelineLayout() const;
 	vk::Pipeline getDepthPipeline() const;
 
@@ -138,12 +146,12 @@ public:
 	vk::CommandBuffer drawBegin();
 	void drawEnd(vk::CommandBuffer commandBuffer);
 
-	void init(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
-	void windowResize(uint32_t width, uint32_t height);
-
 	void initImGui();
 
-	RenderingDevice(std::vector<const char *> extensions, bool useValidation);
+	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void windowResize(uint32_t width, uint32_t height);
+
+	void init(std::vector<const char *> extensions, bool useValidation);
 };
 
 typedef RenderingDevice RD;

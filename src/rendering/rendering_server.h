@@ -7,17 +7,16 @@
 
 #include <glm/glm.hpp>
 
-#include "../image.h"
-
 #include "object_owner.h"
+#include "storage/light_storage.h"
 
-#include "types/allocated.h"
 #include "types/camera.h"
+#include "types/resource.h"
 #include "types/vertex.h"
 
-#include "rendering_device.h"
-
 #define NULL_HANDLE 0
+
+class Image;
 
 class RenderingServer {
 public:
@@ -44,30 +43,6 @@ public:
 	};
 
 private:
-	struct PrimitiveRD {
-		uint32_t indexCount;
-		uint32_t firstIndex;
-		ObjectID material;
-	};
-
-	struct MeshRD {
-		AllocatedBuffer vertexBuffer;
-		AllocatedBuffer indexBuffer;
-		std::vector<PrimitiveRD> primitives;
-	};
-
-	struct MeshInstanceRD {
-		glm::mat4 transform;
-		ObjectID mesh;
-	};
-
-	struct MaterialRD {
-		vk::DescriptorSet textureSet;
-	};
-
-	RenderingDevice *_pDevice;
-	uint32_t _width, _height = 0;
-
 	// fallbacks
 	TextureRD _albedoFallback;
 	TextureRD _normalFallback;

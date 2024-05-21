@@ -15,6 +15,8 @@
 #include "types/allocated.h"
 #include "types/vertex.h"
 
+#include "../image.h"
+
 #include "rendering_device.h"
 
 static vk::Format getVkFormat(Image::Format format) {
@@ -500,6 +502,10 @@ vk::Device RD::getDevice() const {
 	return _pContext->getDevice();
 }
 
+vk::Extent2D RD::getSwapchainExtent() const {
+	return _pContext->getSwapchainExtent();
+}
+
 vk::PipelineLayout RD::getDepthPipelineLayout() const {
 	return _depthLayout;
 }
@@ -664,7 +670,39 @@ void RD::drawEnd(vk::CommandBuffer commandBuffer) {
 	_frame = (_frame + 1) % FRAMES_IN_FLIGHT;
 }
 
-void RD::init(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
+// ImGui error check
+static void vkCheckResult(VkResult err) {
+	if (err == 0)
+		return;
+
+	fprintf(stderr, "ERROR: %d\n", err);
+
+	if (err < 0)
+		abort();
+}
+
+void RD::initImGui() {
+	ImGui_ImplVulkan_InitInfo initInfo;
+	initInfo.Instance = _pContext->getInstance();
+	initInfo.PhysicalDevice = _pContext->getPhysicalDevice();
+	initInfo.Device = _pContext->getDevice();
+	initInfo.QueueFamily = _pContext->getGraphicsQueueFamily();
+	initInfo.Queue = _pContext->getGraphicsQueue();
+	initInfo.PipelineCache = nullptr;
+	initInfo.DescriptorPool = _descriptorPool;
+	initInfo.RenderPass = _pContext->getRenderPass();
+	initInfo.Subpass = TONEMAP_PASS;
+	initInfo.MinImageCount = FRAMES_IN_FLIGHT;
+	initInfo.ImageCount = FRAMES_IN_FLIGHT;
+	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	initInfo.Allocator = nullptr;
+	initInfo.CheckVkResultFn = vkCheckResult;
+
+	ImGui_ImplVulkan_Init(&initInfo);
+	ImGui_ImplVulkan_CreateFontsTexture();
+}
+
+void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	_pContext->initialize(surface, width, height);
 
 	// allocator
@@ -954,38 +992,6 @@ void RD::windowResize(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-// ImGui error check
-static void vkCheckResult(VkResult err) {
-	if (err == 0)
-		return;
-
-	fprintf(stderr, "ERROR: %d\n", err);
-
-	if (err < 0)
-		abort();
-}
-
-void RD::initImGui() {
-	ImGui_ImplVulkan_InitInfo initInfo;
-	initInfo.Instance = _pContext->getInstance();
-	initInfo.PhysicalDevice = _pContext->getPhysicalDevice();
-	initInfo.Device = _pContext->getDevice();
-	initInfo.QueueFamily = _pContext->getGraphicsQueueFamily();
-	initInfo.Queue = _pContext->getGraphicsQueue();
-	initInfo.PipelineCache = nullptr;
-	initInfo.DescriptorPool = _descriptorPool;
-	initInfo.RenderPass = _pContext->getRenderPass();
-	initInfo.Subpass = TONEMAP_PASS;
-	initInfo.MinImageCount = FRAMES_IN_FLIGHT;
-	initInfo.ImageCount = FRAMES_IN_FLIGHT;
-	initInfo.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	initInfo.Allocator = nullptr;
-	initInfo.CheckVkResultFn = vkCheckResult;
-
-	ImGui_ImplVulkan_Init(&initInfo);
-	ImGui_ImplVulkan_CreateFontsTexture();
-}
-
-RD::RenderingDevice(std::vector<const char *> extensions, bool useValidation) {
+void RD::init(std::vector<const char *> extensions, bool useValidation) {
 	_pContext = new VulkanContext(extensions, useValidation);
 }

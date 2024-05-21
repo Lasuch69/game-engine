@@ -15,8 +15,7 @@ private:
 	std::vector<ObjectID> _meshes;
 	std::vector<ObjectID> _meshInstances;
 
-	std::vector<ObjectID> _directionalLights;
-	std::vector<ObjectID> _pointLights;
+	std::vector<ObjectID> _lights;
 
 public:
 	bool load(const std::filesystem::path &path);

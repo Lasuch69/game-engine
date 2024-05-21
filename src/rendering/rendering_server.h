@@ -97,18 +97,12 @@ public:
 	void meshInstanceSetTransform(ObjectID meshInstance, const glm::mat4 &transform);
 	void meshInstanceFree(ObjectID meshInstance);
 
-	ObjectID directionalLightCreate();
-	void directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction);
-	void directionalLightSetIntensity(ObjectID directionalLight, float intensity);
-	void directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color);
-	void directionalLightFree(ObjectID directionalLight);
-
-	ObjectID pointLightCreate();
-	void pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position);
-	void pointLightSetRange(ObjectID pointLight, float range);
-	void pointLightSetColor(ObjectID pointLight, const glm::vec3 &color);
-	void pointLightSetIntensity(ObjectID pointLight, float intensity);
-	void pointLightFree(ObjectID pointLight);
+	ObjectID lightCreate(LightType type);
+	void lightSetTransform(ObjectID light, const glm::mat4 &transform);
+	void lightSetRange(ObjectID light, float range);
+	void lightSetColor(ObjectID light, const glm::vec3 &color);
+	void lightSetIntensity(ObjectID light, float intensity);
+	void lightFree(ObjectID light);
 
 	ObjectID textureCreate(const std::shared_ptr<Image> image);
 	void textureFree(ObjectID texture);

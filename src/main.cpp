@@ -169,9 +169,9 @@ int main(int argc, char *argv[]) {
 
 				if (toggled) {
 					if (enabled) {
-						sun = RS::getInstance().directionalLightCreate();
+						sun = RS::getInstance().lightCreate(LightType::Directional);
 					} else {
-						RS::getInstance().directionalLightFree(sun);
+						RS::getInstance().lightFree(sun);
 					}
 				}
 
@@ -185,12 +185,9 @@ int main(int argc, char *argv[]) {
 					t = glm::rotate(t, d.y, glm::vec3(0.0, 1.0, 0.0)); // rotate X
 					t = glm::rotate(t, d.x, glm::vec3(1.0, 0.0, 0.0)); // rotate Y
 
-					glm::mat3 r(t);
-					glm::vec3 f(0.0f, 0.0f, -1.0f);
-
-					RS::getInstance().directionalLightSetDirection(sun, r * f);
-					RS::getInstance().directionalLightSetColor(sun, glm::make_vec3(color));
-					RS::getInstance().directionalLightSetIntensity(sun, intensity);
+					RS::getInstance().lightSetTransform(sun, t);
+					RS::getInstance().lightSetColor(sun, glm::make_vec3(color));
+					RS::getInstance().lightSetIntensity(sun, intensity);
 				}
 			}
 

@@ -124,48 +124,28 @@ void RS::meshInstanceFree(ObjectID meshInstance) {
 	_meshInstances.free(meshInstance);
 }
 
-ObjectID RS::directionalLightCreate() {
-	return _pDevice->getLightStorage().directionalLightCreate();
+ObjectID RS::lightCreate(LightType type) {
+	return _pDevice->getLightStorage().lightCreate(type);
 }
 
-void RS::directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction) {
-	_pDevice->getLightStorage().directionalLightSetDirection(directionalLight, direction);
+void RS::lightSetTransform(ObjectID light, const glm::mat4 &transform) {
+	_pDevice->getLightStorage().lightSetTransform(light, transform);
 }
 
-void RS::directionalLightSetIntensity(ObjectID directionalLight, float intensity) {
-	_pDevice->getLightStorage().directionalLightSetIntensity(directionalLight, intensity);
+void RS::lightSetRange(ObjectID light, float range) {
+	_pDevice->getLightStorage().lightSetRange(light, range);
 }
 
-void RS::directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color) {
-	_pDevice->getLightStorage().directionalLightSetColor(directionalLight, color);
+void RS::lightSetColor(ObjectID light, const glm::vec3 &color) {
+	_pDevice->getLightStorage().lightSetColor(light, color);
 }
 
-void RS::directionalLightFree(ObjectID directionalLight) {
-	_pDevice->getLightStorage().directionalLightFree(directionalLight);
+void RS::lightSetIntensity(ObjectID light, float intensity) {
+	_pDevice->getLightStorage().lightSetIntensity(light, intensity);
 }
 
-ObjectID RenderingServer::pointLightCreate() {
-	return _pDevice->getLightStorage().pointLightCreate();
-}
-
-void RS::pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position) {
-	_pDevice->getLightStorage().pointLightSetPosition(pointLight, position);
-}
-
-void RS::pointLightSetRange(ObjectID pointLight, float range) {
-	_pDevice->getLightStorage().pointLightSetRange(pointLight, range);
-}
-
-void RS::pointLightSetColor(ObjectID pointLight, const glm::vec3 &color) {
-	_pDevice->getLightStorage().pointLightSetColor(pointLight, color);
-}
-
-void RS::pointLightSetIntensity(ObjectID pointLight, float intensity) {
-	_pDevice->getLightStorage().pointLightSetIntensity(pointLight, intensity);
-}
-
-void RS::pointLightFree(ObjectID pointLight) {
-	_pDevice->getLightStorage().pointLightFree(pointLight);
+void RS::lightFree(ObjectID light) {
+	_pDevice->getLightStorage().lightFree(light);
 }
 
 ObjectID RS::textureCreate(const std::shared_ptr<Image> image) {

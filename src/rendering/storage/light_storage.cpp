@@ -1,3 +1,5 @@
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -11,64 +13,59 @@
 		return;                                                                                    \
 	}
 
-ObjectID LightStorage::directionalLightCreate() {
-	return _directionalLights.insert({});
+ObjectID LightStorage::lightCreate(LightType type) {
+	LightRD light;
+	light.type = type;
+
+	return _lights.insert(light);
 }
 
-void LightStorage::directionalLightSetDirection(
-		ObjectID directionalLight, const glm::vec3 &direction) {
-	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
-	_directionalLights[directionalLight].direction = direction;
+void LightStorage::lightSetTransform(ObjectID light, const glm::mat4 &transform) {
+	CHECK_IF_VALID(_lights, light, "Light");
+	_lights[light].transform = transform;
 }
 
-void LightStorage::directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color) {
-	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
-	_directionalLights[directionalLight].color = color;
+void LightStorage::lightSetRange(ObjectID light, float range) {
+	CHECK_IF_VALID(_lights, light, "Light");
+	_lights[light].range = range;
 }
 
-void LightStorage::directionalLightSetIntensity(ObjectID directionalLight, float intensity) {
-	CHECK_IF_VALID(_directionalLights, directionalLight, "DirectionalLight");
-	_directionalLights[directionalLight].intensity = intensity;
+void LightStorage::lightSetColor(ObjectID light, const glm::vec3 &color) {
+	CHECK_IF_VALID(_lights, light, "Light");
+	_lights[light].color = color;
 }
 
-void LightStorage::directionalLightFree(ObjectID directionalLight) {
-	_directionalLights.free(directionalLight);
+void LightStorage::lightSetIntensity(ObjectID light, float intensity) {
+	CHECK_IF_VALID(_lights, light, "Light");
+	_lights[light].intensity = intensity;
 }
 
-ObjectID LightStorage::pointLightCreate() {
-	return _pointLights.insert({});
+void LightStorage::lightFree(ObjectID light) {
+	_lights.free(light);
 }
 
-void LightStorage::pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-	_pointLights[pointLight].position = position;
+uint32_t LightStorage::getDirectionalLightCount() {
+	uint32_t count = 0;
+	for (const auto &[_, light] : _lights.map()) {
+		if (light.type != LightType::Directional)
+			continue;
+
+		count++;
+	}
+
+	return count;
 }
 
-void LightStorage::pointLightSetRange(ObjectID pointLight, float range) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-	_pointLights[pointLight].range = range;
-}
+uint32_t LightStorage::getPointLightCount() {
+	uint32_t count = 0;
+	for (const auto &[_, light] : _lights.map()) {
+		if (light.type != LightType::Point)
+			continue;
 
-void LightStorage::pointLightSetColor(ObjectID pointLight, const glm::vec3 &color) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-	_pointLights[pointLight].color = color;
-}
+		count++;
+	}
 
-void LightStorage::pointLightSetIntensity(ObjectID pointLight, float intensity) {
-	CHECK_IF_VALID(_pointLights, pointLight, "PointLight");
-	_pointLights[pointLight].intensity = intensity;
-}
-
-void LightStorage::pointLightFree(ObjectID pointLight) {
-	_pointLights.free(pointLight);
-}
-
-uint32_t LightStorage::getDirectionalLightCount() const {
-	return _directionalLights.size();
-}
-
-uint32_t LightStorage::getPointLightCount() const {
-	return _pointLights.size();
+	return count;
 }
 
 vk::DescriptorSetLayout LightStorage::getLightSetLayout() const {
@@ -116,14 +113,19 @@ void LightStorage::initialize(
 	vk::BufferUsageFlags usage =
 			vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst;
 
-	_directionalLightBuffer = AllocatedBuffer::create(allocator, usage,
-			sizeof(DirectionalLightRD) * MAX_DIRECTIONAL_LIGHT_COUNT, &_directionalLightAllocInfo);
+	{
+		vk::DeviceSize size = sizeof(DirectionalData) * MAX_DIRECTIONAL_LIGHT_COUNT;
+		_directionalBuffer =
+				AllocatedBuffer::create(allocator, usage, size, &_directionalAllocInfo);
+	}
 
-	_pointLightBuffer = AllocatedBuffer::create(
-			allocator, usage, sizeof(PointLightRD) * MAX_POINT_LIGHT_COUNT, &_pointLightAllocInfo);
+	{
+		vk::DeviceSize size = sizeof(PunctualData) * MAX_POINT_LIGHT_COUNT;
+		_pointBuffer = AllocatedBuffer::create(allocator, usage, size, &_pointAllocInfo);
+	}
 
-	vk::DescriptorBufferInfo directionalLightBufferInfo = _directionalLightBuffer.getBufferInfo();
-	vk::DescriptorBufferInfo pointLightBufferInfo = _pointLightBuffer.getBufferInfo();
+	vk::DescriptorBufferInfo directionalLightBufferInfo = _directionalBuffer.getBufferInfo();
+	vk::DescriptorBufferInfo pointLightBufferInfo = _pointBuffer.getBufferInfo();
 
 	std::array<vk::WriteDescriptorSet, 2> writeInfos = {};
 	writeInfos[0].setDstSet(_lightSet);
@@ -144,35 +146,50 @@ void LightStorage::initialize(
 }
 
 void LightStorage::update() {
-	{
-		std::vector<DirectionalLightRD> directionalLights(MAX_DIRECTIONAL_LIGHT_COUNT);
+	uint32_t directionalLightIndex = 0;
+	std::vector<DirectionalData> directionalLightData(MAX_DIRECTIONAL_LIGHT_COUNT);
 
-		uint32_t index = 0;
-		for (const auto [_, directionalLight] : _directionalLights.map()) {
-			if (index >= MAX_DIRECTIONAL_LIGHT_COUNT)
-				break;
+	uint32_t pointLightIndex = 0;
+	std::vector<PunctualData> pointLightData(MAX_POINT_LIGHT_COUNT);
 
-			directionalLights[index] = directionalLight;
-			index++;
+	for (const auto &[_, light] : _lights.map()) {
+		if (light.type == LightType::Directional) {
+			glm::vec3 direction(0.0, 0.0, -1.0);
+			direction = glm::mat3(light.transform) * direction;
+
+			DirectionalData data;
+			memcpy(data.direction, &direction, sizeof(data.direction));
+			memcpy(data.color, &light.color, sizeof(data.color));
+			data.intensity = light.intensity;
+
+			directionalLightData[directionalLightIndex] = data;
+			directionalLightIndex++;
+			continue;
 		}
 
-		memcpy(_directionalLightAllocInfo.pMappedData, directionalLights.data(),
-				sizeof(DirectionalLightRD) * MAX_DIRECTIONAL_LIGHT_COUNT);
+		if (light.type == LightType::Point) {
+			glm::vec3 position(light.transform[3]);
+
+			PunctualData data;
+			memcpy(data.position, &position, sizeof(data.position));
+			memcpy(data.color, &light.color, sizeof(data.color));
+			data.intensity = light.intensity;
+
+			pointLightData[pointLightIndex] = data;
+			pointLightIndex++;
+			continue;
+		}
 	}
 
 	{
-		std::vector<PointLightRD> pointLights(MAX_POINT_LIGHT_COUNT);
+		void *pDiretionalLightData = _directionalAllocInfo.pMappedData;
+		size_t size = sizeof(DirectionalData) * MAX_DIRECTIONAL_LIGHT_COUNT;
+		memcpy(pDiretionalLightData, directionalLightData.data(), size);
+	}
 
-		uint32_t index = 0;
-		for (const auto [_, pointLight] : _pointLights.map()) {
-			if (index >= MAX_POINT_LIGHT_COUNT)
-				break;
-
-			pointLights[index] = pointLight;
-			index++;
-		}
-
-		memcpy(_pointLightAllocInfo.pMappedData, pointLights.data(),
-				sizeof(PointLightRD) * MAX_POINT_LIGHT_COUNT);
+	{
+		void *pPointLightData = _pointAllocInfo.pMappedData;
+		size_t size = sizeof(PunctualData) * MAX_POINT_LIGHT_COUNT;
+		memcpy(pPointLightData, pointLightData.data(), size);
 	}
 }

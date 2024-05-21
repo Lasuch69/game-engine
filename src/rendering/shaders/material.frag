@@ -1,5 +1,7 @@
 #version 450
 
+#include "include/light_incl.glsl"
+
 layout(set = 0, binding = 0) uniform UniformBufferObject {
 	vec3 viewPosition;
 
@@ -7,22 +9,8 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 	int pointLightCount;
 };
 
-struct DirectionalLight {
-	vec3 direction;
-	float intensity;
-	vec3 color;
-	float _padding;
-};
-
 layout(set = 1, binding = 0) readonly buffer DirectionalLightBuffer {
 	DirectionalLight directionalLights[];
-};
-
-struct PointLight {
-	vec3 position;
-	float range;
-	vec3 color;
-	float intensity;
 };
 
 layout(set = 1, binding = 1) readonly buffer PointLightBuffer {

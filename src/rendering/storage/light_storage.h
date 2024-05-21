@@ -9,31 +9,47 @@
 const uint32_t MAX_DIRECTIONAL_LIGHT_COUNT = 8;
 const uint32_t MAX_POINT_LIGHT_COUNT = 2048;
 
+enum class LightType {
+	Directional,
+	Point,
+};
+
 class LightStorage {
-	struct DirectionalLightRD {
-		glm::vec3 direction;
-		float intensity;
-		glm::vec3 color;
+	struct DirectionalData {
+		float direction[3];
 		float _padding;
-	};
-	static_assert(sizeof(DirectionalLightRD) % 16 == 0, "DirectionalLightRD is not multiple of 16");
 
-	struct PointLightRD {
-		glm::vec3 position;
+		float color[3];
+		float intensity;
+	};
+	static_assert(sizeof(DirectionalData) % 16 == 0, "DirectionalData is not multiple of 16");
+
+	struct PunctualData {
+		float position[3];
 		float range;
+
+		float color[3];
+		float intensity;
+	};
+	static_assert(sizeof(PunctualData) % 16 == 0, "PunctualData is not multiple of 16");
+
+	struct LightRD {
+		LightType type;
+
+		glm::mat4 transform;
+		float range;
+
 		glm::vec3 color;
 		float intensity;
 	};
-	static_assert(sizeof(PointLightRD) % 16 == 0, "PointLightRD is not multiple of 16");
 
-	AllocatedBuffer _directionalLightBuffer;
-	VmaAllocationInfo _directionalLightAllocInfo;
+	ObjectOwner<LightRD> _lights;
 
-	AllocatedBuffer _pointLightBuffer;
-	VmaAllocationInfo _pointLightAllocInfo;
+	AllocatedBuffer _directionalBuffer;
+	VmaAllocationInfo _directionalAllocInfo;
 
-	ObjectOwner<DirectionalLightRD> _directionalLights;
-	ObjectOwner<PointLightRD> _pointLights;
+	AllocatedBuffer _pointBuffer;
+	VmaAllocationInfo _pointAllocInfo;
 
 	vk::DescriptorSetLayout _lightSetLayout;
 	vk::DescriptorSet _lightSet;
@@ -41,21 +57,15 @@ class LightStorage {
 	bool _initialized = false;
 
 public:
-	ObjectID directionalLightCreate();
-	void directionalLightSetDirection(ObjectID directionalLight, const glm::vec3 &direction);
-	void directionalLightSetIntensity(ObjectID directionalLight, float intensity);
-	void directionalLightSetColor(ObjectID directionalLight, const glm::vec3 &color);
-	void directionalLightFree(ObjectID directionalLight);
+	ObjectID lightCreate(LightType type);
+	void lightSetTransform(ObjectID light, const glm::mat4 &transform);
+	void lightSetRange(ObjectID light, float range);
+	void lightSetColor(ObjectID light, const glm::vec3 &color);
+	void lightSetIntensity(ObjectID light, float intensity);
+	void lightFree(ObjectID light);
 
-	ObjectID pointLightCreate();
-	void pointLightSetPosition(ObjectID pointLight, const glm::vec3 &position);
-	void pointLightSetRange(ObjectID pointLight, float range);
-	void pointLightSetColor(ObjectID pointLight, const glm::vec3 &color);
-	void pointLightSetIntensity(ObjectID pointLight, float intensity);
-	void pointLightFree(ObjectID pointLight);
-
-	uint32_t getDirectionalLightCount() const;
-	uint32_t getPointLightCount() const;
+	uint32_t getDirectionalLightCount();
+	uint32_t getPointLightCount();
 
 	vk::DescriptorSetLayout getLightSetLayout() const;
 	vk::DescriptorSet getLightSet() const;

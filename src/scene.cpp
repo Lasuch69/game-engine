@@ -89,40 +89,28 @@ bool Scene::load(const std::filesystem::path &path) {
 	}
 
 	for (const Loader::Light &sceneLight : scene.lights) {
-		if (sceneLight.type == Loader::LightType::Point) {
-			glm::vec3 position = glm::vec3(sceneLight.transform[3]);
-			float range = sceneLight.range.value_or(0.0f);
-			glm::vec3 color = sceneLight.color;
-			float intensity = sceneLight.intensity;
+		glm::mat4 transform = sceneLight.transform;
+		float range = sceneLight.range.value_or(0.0f);
+		glm::vec3 color = sceneLight.color;
+		float intensity = sceneLight.intensity;
 
-			ObjectID pointLight = RS::getInstance().pointLightCreate();
-			RS::getInstance().pointLightSetPosition(pointLight, position);
-			RS::getInstance().pointLightSetRange(pointLight, range);
-			RS::getInstance().pointLightSetColor(pointLight, color);
-			RS::getInstance().pointLightSetIntensity(pointLight, intensity);
+		ObjectID light;
 
-			_pointLights.push_back(pointLight);
-
-			continue;
+		switch (sceneLight.type) {
+			case Loader::LightType::Directional:
+				light = RS::getInstance().lightCreate(LightType::Directional);
+				break;
+			case Loader::LightType::Point:
+				light = RS::getInstance().lightCreate(LightType::Point);
+				break;
 		}
 
-		if (sceneLight.type == Loader::LightType::Directional) {
-			glm::vec3 front = glm::vec3(0.0f, 0.0f, -1.0f);
-			glm::mat3 rotation = glm::mat3(sceneLight.transform);
+		RS::getInstance().lightSetTransform(light, transform);
+		RS::getInstance().lightSetRange(light, range);
+		RS::getInstance().lightSetColor(light, color);
+		RS::getInstance().lightSetIntensity(light, intensity);
 
-			glm::vec3 direction = rotation * front;
-			glm::vec3 color = sceneLight.color;
-			float intensity = sceneLight.intensity;
-
-			ObjectID directionalLight = RS::getInstance().directionalLightCreate();
-			RS::getInstance().directionalLightSetDirection(directionalLight, direction);
-			RS::getInstance().directionalLightSetIntensity(directionalLight, intensity);
-			RS::getInstance().directionalLightSetColor(directionalLight, color);
-
-			_directionalLights.push_back(directionalLight);
-
-			continue;
-		}
+		_lights.push_back(light);
 	}
 
 	return true;
@@ -132,11 +120,8 @@ void Scene::clear() {
 	for (ObjectID meshInstance : _meshInstances)
 		RS::getInstance().meshInstanceFree(meshInstance);
 
-	for (ObjectID directionalLight : _directionalLights)
-		RS::getInstance().directionalLightFree(directionalLight);
-
-	for (ObjectID pointLight : _pointLights)
-		RS::getInstance().pointLightFree(pointLight);
+	for (ObjectID light : _lights)
+		RS::getInstance().lightFree(light);
 
 	for (ObjectID mesh : _meshes)
 		RS::getInstance().meshFree(mesh);
@@ -148,7 +133,7 @@ void Scene::clear() {
 		RS::getInstance().textureFree(texture);
 
 	_meshInstances.clear();
-	_pointLights.clear();
+	_lights.clear();
 	_meshes.clear();
 	_materials.clear();
 	_textures.clear();

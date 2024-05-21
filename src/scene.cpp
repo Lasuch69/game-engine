@@ -17,7 +17,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (albedoIndex.has_value()) {
 			std::shared_ptr<Image> albedoMap = scene.images[albedoIndex.value()];
 
-			ObjectID t = RS::getInstance().textureCreate(albedoMap);
+			ObjectID t = RS::getSingleton().textureCreate(albedoMap);
 			_textures.push_back(t);
 
 			info.albedo = t;
@@ -27,7 +27,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (normalIndex.has_value()) {
 			std::shared_ptr<Image> normalMap = scene.images[normalIndex.value()];
 
-			ObjectID t = RS::getInstance().textureCreate(normalMap);
+			ObjectID t = RS::getSingleton().textureCreate(normalMap);
 			_textures.push_back(t);
 
 			info.normal = t;
@@ -37,7 +37,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (metallicIndex.has_value()) {
 			std::shared_ptr<Image> metallicMap = scene.images[metallicIndex.value()];
 
-			ObjectID t = RS::getInstance().textureCreate(metallicMap);
+			ObjectID t = RS::getSingleton().textureCreate(metallicMap);
 			_textures.push_back(t);
 
 			info.metallic = t;
@@ -47,13 +47,13 @@ bool Scene::load(const std::filesystem::path &path) {
 		if (roughnessIndex.has_value()) {
 			std::shared_ptr<Image> roughnessMap = scene.images[roughnessIndex.value()];
 
-			ObjectID t = RS::getInstance().textureCreate(roughnessMap);
+			ObjectID t = RS::getSingleton().textureCreate(roughnessMap);
 			_textures.push_back(t);
 
 			info.roughness = t;
 		}
 
-		ObjectID material = RS::getInstance().materialCreate(info);
+		ObjectID material = RS::getSingleton().materialCreate(info);
 		_materials.push_back(material);
 	}
 
@@ -71,7 +71,7 @@ bool Scene::load(const std::filesystem::path &path) {
 			primitives.push_back(primitive);
 		}
 
-		ObjectID mesh = RS::getInstance().meshCreate(primitives);
+		ObjectID mesh = RS::getSingleton().meshCreate(primitives);
 		_meshes.push_back(mesh);
 	}
 
@@ -81,9 +81,9 @@ bool Scene::load(const std::filesystem::path &path) {
 		ObjectID mesh = _meshes[meshIndex];
 		glm::mat4 transform = sceneMeshInstance.transform;
 
-		ObjectID meshInstance = RS::getInstance().meshInstanceCreate();
-		RS::getInstance().meshInstanceSetMesh(meshInstance, mesh);
-		RS::getInstance().meshInstanceSetTransform(meshInstance, transform);
+		ObjectID meshInstance = RS::getSingleton().meshInstanceCreate();
+		RS::getSingleton().meshInstanceSetMesh(meshInstance, mesh);
+		RS::getSingleton().meshInstanceSetTransform(meshInstance, transform);
 
 		_meshInstances.push_back(meshInstance);
 	}
@@ -98,17 +98,17 @@ bool Scene::load(const std::filesystem::path &path) {
 
 		switch (sceneLight.type) {
 			case Loader::LightType::Directional:
-				light = RS::getInstance().lightCreate(LightType::Directional);
+				light = RS::getSingleton().lightCreate(LightType::Directional);
 				break;
 			case Loader::LightType::Point:
-				light = RS::getInstance().lightCreate(LightType::Point);
+				light = RS::getSingleton().lightCreate(LightType::Point);
 				break;
 		}
 
-		RS::getInstance().lightSetTransform(light, transform);
-		RS::getInstance().lightSetRange(light, range);
-		RS::getInstance().lightSetColor(light, color);
-		RS::getInstance().lightSetIntensity(light, intensity);
+		RS::getSingleton().lightSetTransform(light, transform);
+		RS::getSingleton().lightSetRange(light, range);
+		RS::getSingleton().lightSetColor(light, color);
+		RS::getSingleton().lightSetIntensity(light, intensity);
 
 		_lights.push_back(light);
 	}
@@ -118,19 +118,19 @@ bool Scene::load(const std::filesystem::path &path) {
 
 void Scene::clear() {
 	for (ObjectID meshInstance : _meshInstances)
-		RS::getInstance().meshInstanceFree(meshInstance);
+		RS::getSingleton().meshInstanceFree(meshInstance);
 
 	for (ObjectID light : _lights)
-		RS::getInstance().lightFree(light);
+		RS::getSingleton().lightFree(light);
 
 	for (ObjectID mesh : _meshes)
-		RS::getInstance().meshFree(mesh);
+		RS::getSingleton().meshFree(mesh);
 
 	for (ObjectID material : _materials)
-		RS::getInstance().materialFree(material);
+		RS::getSingleton().materialFree(material);
 
 	for (ObjectID texture : _textures)
-		RS::getInstance().textureFree(texture);
+		RS::getSingleton().textureFree(texture);
 
 	_meshInstances.clear();
 	_lights.clear();

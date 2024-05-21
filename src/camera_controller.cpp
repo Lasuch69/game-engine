@@ -13,7 +13,7 @@ void CameraController::_update() {
 	_transform = glm::rotate(_transform, _rotation.x, glm::vec3(0.0, 1.0f, 0.0)); // rotate Y
 	_transform = glm::rotate(_transform, _rotation.y, glm::vec3(1.0f, 0.0, 0.0)); // rotate X
 
-	RS::getInstance().cameraSetTransform(_transform);
+	RS::getSingleton().cameraSetTransform(_transform);
 }
 
 void CameraController::_rotate(const glm::vec2 &input) {

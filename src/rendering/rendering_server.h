@@ -21,7 +21,7 @@
 
 class RenderingServer {
 public:
-	static RenderingServer &getInstance() {
+	static RenderingServer &getSingleton() {
 		static RenderingServer instance;
 		return instance;
 	}

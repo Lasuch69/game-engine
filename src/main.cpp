@@ -38,14 +38,14 @@ SDL_Window *windowInitialize(int argc, char *argv[]) {
 		return nullptr;
 	}
 
-	RS::getInstance().initialize(argc, argv);
+	RS::getSingleton().initialize(argc, argv);
 
 	VkSurfaceKHR surface;
-	SDL_Vulkan_CreateSurface(pWindow, RS::getInstance().getVkInstance(), &surface);
+	SDL_Vulkan_CreateSurface(pWindow, RS::getSingleton().getVkInstance(), &surface);
 
 	int width, height;
 	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-	RS::getInstance().windowInit(surface, width, height);
+	RS::getSingleton().windowInit(surface, width, height);
 
 	return pWindow;
 }
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
 
 	ImGui_ImplSDL2_InitForVulkan(pWindow);
 
-	RS::getInstance().initImGui();
+	RS::getSingleton().initImGui();
 
 	Scene *pScene = new Scene;
 
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
 					case SDL_WINDOWEVENT_RESIZED:
 						int width, height;
 						SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-						RS::getInstance().windowResized(width, height);
+						RS::getSingleton().windowResized(width, height);
 						break;
 					default:
 						break;
@@ -169,9 +169,9 @@ int main(int argc, char *argv[]) {
 
 				if (toggled) {
 					if (enabled) {
-						sun = RS::getInstance().lightCreate(LightType::Directional);
+						sun = RS::getSingleton().lightCreate(LightType::Directional);
 					} else {
-						RS::getInstance().lightFree(sun);
+						RS::getSingleton().lightFree(sun);
 					}
 				}
 
@@ -185,9 +185,9 @@ int main(int argc, char *argv[]) {
 					t = glm::rotate(t, d.y, glm::vec3(0.0, 1.0, 0.0)); // rotate X
 					t = glm::rotate(t, d.x, glm::vec3(1.0, 0.0, 0.0)); // rotate Y
 
-					RS::getInstance().lightSetTransform(sun, t);
-					RS::getInstance().lightSetColor(sun, glm::make_vec3(color));
-					RS::getInstance().lightSetIntensity(sun, intensity);
+					RS::getSingleton().lightSetTransform(sun, t);
+					RS::getSingleton().lightSetColor(sun, glm::make_vec3(color));
+					RS::getSingleton().lightSetIntensity(sun, intensity);
 				}
 			}
 
@@ -198,8 +198,8 @@ int main(int argc, char *argv[]) {
 				ImGui::DragFloat("Exposure", &exposure, 0.01f, 0.0f, 10.0f, "%.2f");
 				ImGui::DragFloat("White", &white, 0.01f, 0.0f, 16.0f, "%.2f");
 
-				RS::getInstance().setExposure(exposure);
-				RS::getInstance().setWhite(white);
+				RS::getSingleton().setExposure(exposure);
+				RS::getSingleton().setWhite(white);
 			}
 
 			if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
 
 		ImGui::Render();
 
-		RS::getInstance().draw();
+		RS::getSingleton().draw();
 	}
 
 	ImGui_ImplVulkan_Shutdown();

@@ -150,78 +150,6 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	return result.value;
 }
 
-vk::CommandBuffer RD::_beginSingleTimeCommands() {
-	vk::CommandBufferAllocateInfo allocInfo;
-	allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
-	allocInfo.setCommandPool(_pContext->getCommandPool());
-	allocInfo.setCommandBufferCount(1);
-
-	vk::CommandBuffer commandBuffer = _pContext->getDevice().allocateCommandBuffers(allocInfo)[0];
-
-	vk::CommandBufferBeginInfo beginInfo = { vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
-	commandBuffer.begin(beginInfo);
-
-	return commandBuffer;
-}
-
-void RD::_endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
-	commandBuffer.end();
-
-	vk::SubmitInfo submitInfo;
-	submitInfo.setCommandBufferCount(1);
-	submitInfo.setCommandBuffers(commandBuffer);
-
-	_pContext->getGraphicsQueue().submit(submitInfo, VK_NULL_HANDLE);
-	_pContext->getGraphicsQueue().waitIdle();
-
-	_pContext->getDevice().freeCommandBuffers(_pContext->getCommandPool(), commandBuffer);
-}
-
-void RD::_transitionImageLayout(vk::Image image, vk::Format format, uint32_t mipLevels,
-		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
-	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
-
-	vk::ImageSubresourceRange subresourceRange;
-	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
-	subresourceRange.setBaseMipLevel(0);
-	subresourceRange.setLevelCount(mipLevels);
-	subresourceRange.setBaseArrayLayer(0);
-	subresourceRange.setLayerCount(1);
-
-	vk::ImageMemoryBarrier barrier;
-	barrier.setOldLayout(oldLayout);
-	barrier.setNewLayout(newLayout);
-	barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-	barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
-	barrier.setImage(image);
-	barrier.setSubresourceRange(subresourceRange);
-
-	vk::PipelineStageFlags sourceStage;
-	vk::PipelineStageFlags destinationStage;
-
-	if (oldLayout == vk::ImageLayout::eUndefined &&
-			newLayout == vk::ImageLayout::eTransferDstOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
-
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-		destinationStage = vk::PipelineStageFlagBits::eTransfer;
-	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
-			   newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
-
-		sourceStage = vk::PipelineStageFlagBits::eTransfer;
-		destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
-	} else {
-		throw std::invalid_argument("Unsupported layout transition!");
-	}
-
-	commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, barrier);
-
-	_endSingleTimeCommands(commandBuffer);
-}
-
 void RD::_generateMipmaps(
 		vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels) {
 	vk::FormatProperties properties = _pContext->getPhysicalDevice().getFormatProperties(format);
@@ -231,7 +159,7 @@ void RD::_generateMipmaps(
 
 	assert(isBlittingSupported);
 
-	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
+	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	vk::ImageSubresourceRange subresourceRange;
 	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
@@ -313,7 +241,34 @@ void RD::_generateMipmaps(
 	commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
 			vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr, nullptr, barrier);
 
-	_endSingleTimeCommands(commandBuffer);
+	endSingleTimeCommands(commandBuffer);
+}
+
+vk::CommandBuffer RD::beginSingleTimeCommands() {
+	vk::CommandBufferAllocateInfo allocInfo;
+	allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
+	allocInfo.setCommandPool(_pContext->getCommandPool());
+	allocInfo.setCommandBufferCount(1);
+
+	vk::CommandBuffer commandBuffer = _pContext->getDevice().allocateCommandBuffers(allocInfo)[0];
+
+	vk::CommandBufferBeginInfo beginInfo = { vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
+	commandBuffer.begin(beginInfo);
+
+	return commandBuffer;
+}
+
+void RD::endSingleTimeCommands(vk::CommandBuffer commandBuffer) {
+	commandBuffer.end();
+
+	vk::SubmitInfo submitInfo;
+	submitInfo.setCommandBufferCount(1);
+	submitInfo.setCommandBuffers(commandBuffer);
+
+	_pContext->getGraphicsQueue().submit(submitInfo, VK_NULL_HANDLE);
+	_pContext->getGraphicsQueue().waitIdle();
+
+	_pContext->getDevice().freeCommandBuffers(_pContext->getCommandPool(), commandBuffer);
 }
 
 AllocatedBuffer RD::bufferCreate(
@@ -322,7 +277,7 @@ AllocatedBuffer RD::bufferCreate(
 }
 
 void RD::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) {
-	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
+	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	vk::BufferCopy bufferCopy;
 	bufferCopy.setSrcOffset(0);
@@ -331,7 +286,29 @@ void RD::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize s
 
 	commandBuffer.copyBuffer(srcBuffer, dstBuffer, bufferCopy);
 
-	_endSingleTimeCommands(commandBuffer);
+	endSingleTimeCommands(commandBuffer);
+}
+
+void RD::bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) {
+	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+	vk::ImageSubresourceLayers imageSubresource;
+	imageSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	imageSubresource.setMipLevel(0);
+	imageSubresource.setBaseArrayLayer(0);
+	imageSubresource.setLayerCount(1);
+
+	vk::BufferImageCopy region;
+	region.setBufferOffset(0);
+	region.setBufferRowLength(0);
+	region.setBufferImageHeight(0);
+	region.setImageSubresource(imageSubresource);
+	region.setImageOffset(vk::Offset3D{ 0, 0, 0 });
+	region.setImageExtent(vk::Extent3D{ width, height, 1 });
+
+	commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+
+	endSingleTimeCommands(commandBuffer);
 }
 
 void RD::bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size) {
@@ -351,33 +328,54 @@ void RD::bufferDestroy(AllocatedBuffer buffer) {
 	vmaDestroyBuffer(_allocator, buffer.buffer, buffer.allocation);
 }
 
-void RD::_bufferCopyToImage(
-		vk::Buffer srcBuffer, vk::Image dstImage, uint32_t width, uint32_t height) {
-	vk::CommandBuffer commandBuffer = _beginSingleTimeCommands();
-
-	vk::ImageSubresourceLayers imageSubresource;
-	imageSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
-	imageSubresource.setMipLevel(0);
-	imageSubresource.setBaseArrayLayer(0);
-	imageSubresource.setLayerCount(1);
-
-	vk::BufferImageCopy region;
-	region.setBufferOffset(0);
-	region.setBufferRowLength(0);
-	region.setBufferImageHeight(0);
-	region.setImageSubresource(imageSubresource);
-	region.setImageOffset(vk::Offset3D{ 0, 0, 0 });
-	region.setImageExtent(vk::Extent3D{ width, height, 1 });
-
-	commandBuffer.copyBufferToImage(
-			srcBuffer, dstImage, vk::ImageLayout::eTransferDstOptimal, region);
-
-	_endSingleTimeCommands(commandBuffer);
-}
-
 AllocatedImage RD::imageCreate(uint32_t width, uint32_t height, vk::Format format,
 		uint32_t mipLevels, vk::ImageUsageFlags usage) {
 	return AllocatedImage::create(_allocator, width, height, mipLevels, 1, format, usage);
+}
+
+void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
+		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+	vk::ImageSubresourceRange subresourceRange;
+	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	subresourceRange.setBaseMipLevel(0);
+	subresourceRange.setLevelCount(mipLevels);
+	subresourceRange.setBaseArrayLayer(0);
+	subresourceRange.setLayerCount(1);
+
+	vk::ImageMemoryBarrier barrier;
+	barrier.setOldLayout(oldLayout);
+	barrier.setNewLayout(newLayout);
+	barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+	barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+	barrier.setImage(image);
+	barrier.setSubresourceRange(subresourceRange);
+
+	vk::PipelineStageFlags sourceStage;
+	vk::PipelineStageFlags destinationStage;
+
+	if (oldLayout == vk::ImageLayout::eUndefined &&
+			newLayout == vk::ImageLayout::eTransferDstOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eTransfer;
+	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+			   newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+
+		sourceStage = vk::PipelineStageFlagBits::eTransfer;
+		destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+	} else {
+		throw std::invalid_argument("Unsupported layout transition!");
+	}
+
+	commandBuffer.pipelineBarrier(sourceStage, destinationStage, {}, nullptr, nullptr, barrier);
+
+	endSingleTimeCommands(commandBuffer);
 }
 
 void RD::imageDestroy(AllocatedImage image) {
@@ -455,10 +453,10 @@ TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 	memcpy(stagingAllocInfo.pMappedData, data.data(), data.size());
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
 
-	_transitionImageLayout(allocatedImage.image, format, mipLevels, vk::ImageLayout::eUndefined,
+	imageLayoutTransition(allocatedImage.image, format, mipLevels, vk::ImageLayout::eUndefined,
 			vk::ImageLayout::eTransferDstOptimal);
 
-	_bufferCopyToImage(stagingBuffer.buffer, allocatedImage.image, width, height);
+	bufferCopyToImage(stagingBuffer.buffer, allocatedImage.image, width, height);
 
 	bufferDestroy(stagingBuffer);
 

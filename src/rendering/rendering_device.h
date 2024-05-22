@@ -85,15 +85,6 @@ private:
 	float _exposure = 1.25f;
 	float _white = 8.0f;
 
-	vk::CommandBuffer _beginSingleTimeCommands();
-	void _endSingleTimeCommands(vk::CommandBuffer commandBuffer);
-
-	void _transitionImageLayout(vk::Image image, vk::Format format, uint32_t mipLevels,
-			vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-
-	void _bufferCopyToImage(
-			vk::Buffer srcBuffer, vk::Image dstImage, uint32_t width, uint32_t height);
-
 	void _generateMipmaps(
 			vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels);
 
@@ -101,14 +92,20 @@ public:
 	RenderingDevice(RenderingDevice const &) = delete;
 	void operator=(RenderingDevice const &) = delete;
 
+	vk::CommandBuffer beginSingleTimeCommands();
+	void endSingleTimeCommands(vk::CommandBuffer commandBuffer);
+
 	AllocatedBuffer bufferCreate(
 			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
 	void bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
+	void bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height);
 	void bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size);
 	void bufferDestroy(AllocatedBuffer buffer);
 
 	AllocatedImage imageCreate(uint32_t width, uint32_t height, vk::Format format,
 			uint32_t mipLevels, vk::ImageUsageFlags usage);
+	void imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
+			vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 	void imageDestroy(AllocatedImage image);
 
 	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels);

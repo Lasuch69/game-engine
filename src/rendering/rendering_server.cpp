@@ -245,13 +245,24 @@ void RS::setWhite(float white) {
 	RD::getSingleton().setWhite(white);
 }
 
+void RS::environmentSkyUpdate(const std::shared_ptr<Image> image) {
+	RD::getSingleton().environmentSkyUpdate(image);
+}
+
 void RenderingServer::draw() {
 	RD &rd = RD::getSingleton();
 	rd.updateUniformBuffer(_camera.transform[3]);
 
 	vk::Extent2D extent = rd.getSwapchainExtent();
 	float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-	glm::mat4 projView = _camera.projectionMatrix(aspect) * _camera.viewMatrix();
+
+	glm::mat4 proj = _camera.projectionMatrix(aspect);
+	glm::mat4 view = _camera.viewMatrix();
+
+	glm::mat4 invProj = glm::inverse(proj);
+	glm::mat4 invView = glm::inverse(view);
+
+	glm::mat4 projView = proj * view;
 
 	vk::CommandBuffer commandBuffer = rd.drawBegin();
 
@@ -280,8 +291,23 @@ void RenderingServer::draw() {
 
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getMaterialPipeline());
+	{
+		// sky
 
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getSkyPipeline());
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+				rd.getSkyPipelineLayout(), 0, rd.getSkySet(), nullptr);
+
+		SkyConstants constants{};
+		constants.invProj = invProj;
+		constants.invView = invView;
+
+		commandBuffer.pushConstants(rd.getSkyPipelineLayout(), vk::ShaderStageFlagBits::eFragment,
+				0, sizeof(constants), &constants);
+		commandBuffer.draw(3, 1, 0, 0);
+	}
+
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getMaterialPipeline());
 	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
 			rd.getMaterialPipelineLayout(), 0, rd.getMaterialSets(), nullptr);
 
@@ -303,7 +329,7 @@ void RenderingServer::draw() {
 
 		for (const PrimitiveRD &primitive : mesh.primitives) {
 			MaterialRD material = _materials[primitive.material];
-			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 2,
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, pipelineLayout, 3,
 					material.textureSet, nullptr);
 
 			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);

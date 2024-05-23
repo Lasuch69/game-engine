@@ -9,26 +9,28 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 	int pointLightCount;
 };
 
-layout(set = 1, binding = 0) readonly buffer DirectionalLightBuffer {
+layout(set = 1, binding = 0) uniform samplerCube environmentIrradiance;
+layout(set = 1, binding = 1) uniform samplerCube environmentSpecular;
+layout(set = 1, binding = 2) uniform sampler2D brdfLUT;
+
+layout(set = 2, binding = 0) readonly buffer DirectionalLightBuffer {
 	DirectionalLight directionalLights[];
 };
 
-layout(set = 1, binding = 1) readonly buffer PointLightBuffer {
+layout(set = 2, binding = 1) readonly buffer PointLightBuffer {
 	PointLight pointLights[];
 };
 
-layout(set = 2, binding = 0) uniform sampler2D albedoTexture;
-layout(set = 2, binding = 1) uniform sampler2D normalTexture;
-layout(set = 2, binding = 2) uniform sampler2D metallicTexture;
-layout(set = 2, binding = 3) uniform sampler2D roughnessTexture;
+layout(set = 3, binding = 0) uniform sampler2D albedoTexture;
+layout(set = 3, binding = 1) uniform sampler2D normalTexture;
+layout(set = 3, binding = 2) uniform sampler2D metallicTexture;
+layout(set = 3, binding = 3) uniform sampler2D roughnessTexture;
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec3 inTangent;
 layout(location = 3) in vec2 inUV;
-
 layout(location = 4) in vec3 inBitangent;
-
 layout(location = 0) out vec4 fragColor;
 
 layout(early_fragment_tests) in;
@@ -78,6 +80,10 @@ float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
 vec3 sRGBToLinear(vec3 c) {
@@ -161,7 +167,25 @@ void main() {
 		Lo += (kD * albedo / PI + specular) * radiance * NdotL;
 	}
 
-	vec3 ambient = vec3(0.0) * albedo;
+	float NoV = saturate(dot(N, V));
+	vec3 R = 2.0 * dot(V, N) * N - V;
+	vec3 F = fresnelSchlickRoughness(NoV, F0, roughness);
+
+	vec3 kS = F;
+	vec3 kD = vec3(1.0) - kS;
+	kD *= 1.0 - metallic;
+
+	vec3 irradiance = texture(environmentIrradiance, N).rgb;
+	vec3 diffuse = irradiance * albedo;
+
+	const float MAX_REFLECTION_LOD = 4.0;
+	float lod = roughness * MAX_REFLECTION_LOD;
+
+	vec3 prefilteredColor = textureLod(environmentSpecular, R, lod).rgb;
+	vec2 envBRDF = texture(brdfLUT, vec2(NoV, roughness)).rg;
+	vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+
+	vec3 ambient = (kD * diffuse + specular);
 	vec3 color = ambient + Lo;
 
 	fragColor = vec4(color, 1.0);

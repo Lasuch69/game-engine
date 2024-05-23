@@ -25,19 +25,21 @@ private:
 	}
 
 	static vk::Image _createImage(vk::Device device, uint32_t width, uint32_t height,
-			vk::Format format, vk::ImageUsageFlags usage,
-			vk::PhysicalDeviceMemoryProperties memProperties, vk::DeviceMemory *pMemory) {
+			uint32_t arrayLayers, vk::Format format, vk::ImageUsageFlags usage,
+			vk::PhysicalDeviceMemoryProperties memProperties, vk::DeviceMemory *pMemory,
+			vk::ImageCreateFlags flags = {}) {
 		vk::ImageCreateInfo createInfo = {};
 		createInfo.setImageType(vk::ImageType::e2D);
 		createInfo.setExtent(vk::Extent3D(width, height, 1));
 		createInfo.setMipLevels(1);
-		createInfo.setArrayLayers(1);
+		createInfo.setArrayLayers(arrayLayers);
 		createInfo.setFormat(format);
 		createInfo.setTiling(vk::ImageTiling::eOptimal);
 		createInfo.setInitialLayout(vk::ImageLayout::eUndefined);
 		createInfo.setUsage(usage);
 		createInfo.setSamples(vk::SampleCountFlagBits::e1);
 		createInfo.setSharingMode(vk::SharingMode::eExclusive);
+		createInfo.setFlags(flags);
 
 		vk::Image image = device.createImage(createInfo);
 
@@ -59,18 +61,18 @@ private:
 		return image;
 	}
 
-	static vk::ImageView _createView(vk::Device device, vk::Image image, vk::Format format,
-			vk::ImageAspectFlagBits aspectFlags) {
+	static vk::ImageView _createView(vk::Device device, vk::Image image, vk::ImageViewType viewType,
+			vk::Format format, vk::ImageAspectFlagBits aspectFlags, uint32_t arrayLayers) {
 		vk::ImageSubresourceRange subresourceRange = {};
 		subresourceRange.setAspectMask(aspectFlags);
 		subresourceRange.setBaseMipLevel(0);
 		subresourceRange.setLevelCount(1);
 		subresourceRange.setBaseArrayLayer(0);
-		subresourceRange.setLayerCount(1);
+		subresourceRange.setLayerCount(arrayLayers);
 
 		vk::ImageViewCreateInfo createInfo = {};
 		createInfo.setImage(image);
-		createInfo.setViewType(vk::ImageViewType::e2D);
+		createInfo.setViewType(viewType);
 		createInfo.setFormat(format);
 		createInfo.setSubresourceRange(subresourceRange);
 
@@ -80,11 +82,12 @@ private:
 public:
 	static Attachment create(vk::Device device, uint32_t width, uint32_t height, vk::Format format,
 			vk::ImageUsageFlags usage, vk::ImageAspectFlagBits aspectFlags,
-			vk::PhysicalDeviceMemoryProperties memProperties) {
+			vk::PhysicalDeviceMemoryProperties memProperties, uint32_t arrayLayers = 1,
+			vk::ImageViewType viewType = vk::ImageViewType::e2D, vk::ImageCreateFlags flags = {}) {
 		vk::DeviceMemory memory;
-		vk::Image image =
-				_createImage(device, width, height, format, usage, memProperties, &memory);
-		vk::ImageView view = _createView(device, image, format, aspectFlags);
+		vk::Image image = _createImage(
+				device, width, height, arrayLayers, format, usage, memProperties, &memory, flags);
+		vk::ImageView view = _createView(device, image, viewType, format, aspectFlags, arrayLayers);
 
 		return Attachment(image, view, memory, format);
 	}

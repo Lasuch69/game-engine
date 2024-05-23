@@ -9,7 +9,11 @@
 #include "types/attachment.h"
 
 const std::vector<const char *> VALIDATION_LAYERS = { "VK_LAYER_KHRONOS_validation" };
-const std::vector<const char *> DEVICE_EXTENSIONS = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+const std::vector<const char *> DEVICE_EXTENSIONS = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	VK_KHR_MULTIVIEW_EXTENSION_NAME,
+};
 
 const uint32_t DEPTH_PASS = 0;
 const uint32_t MAIN_PASS = 1;

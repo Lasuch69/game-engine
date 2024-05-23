@@ -11,6 +11,8 @@
 #include "types/allocated.h"
 #include "types/resource.h"
 
+#include "effects/environment_effects.h"
+
 #include "vulkan_context.h"
 
 const int FRAMES_IN_FLIGHT = 2;
@@ -29,6 +31,11 @@ struct MeshPushConstants {
 struct TonemapParameterConstants {
 	float exposure;
 	float white;
+};
+
+struct SkyConstants {
+	glm::mat4 invProj;
+	glm::mat4 invView;
 };
 
 class Image;
@@ -64,15 +71,22 @@ private:
 	vk::DescriptorSetLayout _uniformLayout;
 	vk::DescriptorSetLayout _inputAttachmentLayout;
 	vk::DescriptorSetLayout _textureLayout;
+	vk::DescriptorSetLayout _skySetLayout;
+	vk::DescriptorSetLayout _iblSetLayout;
 
 	vk::DescriptorSet _uniformSets[FRAMES_IN_FLIGHT];
 	vk::DescriptorSet _inputAttachmentSet;
+	vk::DescriptorSet _skySet;
+	vk::DescriptorSet _iblSet;
 
 	AllocatedBuffer _uniformBuffers[FRAMES_IN_FLIGHT];
 	VmaAllocationInfo _uniformAllocInfos[FRAMES_IN_FLIGHT];
 
 	vk::PipelineLayout _depthLayout;
 	vk::Pipeline _depthPipeline;
+
+	vk::PipelineLayout _skyLayout;
+	vk::Pipeline _skyPipeline;
 
 	vk::PipelineLayout _materialLayout;
 	vk::Pipeline _materialPipeline;
@@ -82,11 +96,13 @@ private:
 
 	std::optional<uint32_t> _imageIndex;
 
+	EnvironmentEffects _environmentEffects;
+
 	float _exposure = 1.25f;
 	float _white = 8.0f;
 
-	void _generateMipmaps(
-			vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels);
+	void _generateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Format format,
+			uint32_t mipLevels, uint32_t arrayLayers = 1);
 
 public:
 	RenderingDevice(RenderingDevice const &) = delete;
@@ -104,11 +120,17 @@ public:
 
 	AllocatedImage imageCreate(uint32_t width, uint32_t height, vk::Format format,
 			uint32_t mipLevels, vk::ImageUsageFlags usage);
+	AllocatedImage imageCubeCreate(
+			uint32_t size, vk::Format format, uint32_t mipLevels, vk::ImageUsageFlags usage);
 	void imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
-			vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+			uint32_t arrayLayers, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	void imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size);
+	AllocatedImage imageCopyToCube(
+			vk::Image image, uint32_t width, uint32_t height, vk::Format format);
 	void imageDestroy(AllocatedImage image);
 
-	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels);
+	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels,
+			uint32_t arrayLayers = 1, vk::ImageViewType viewType = vk::ImageViewType::e2D);
 	void imageViewDestroy(vk::ImageView imageView);
 
 	vk::Sampler samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias = 0.0f);
@@ -122,6 +144,7 @@ public:
 	LightStorage &getLightStorage();
 
 	vk::Instance getInstance() const;
+	vk::PhysicalDevice getPhysicalDevice() const;
 	vk::Device getDevice() const;
 
 	vk::Extent2D getSwapchainExtent() const;
@@ -129,10 +152,15 @@ public:
 	vk::PipelineLayout getDepthPipelineLayout() const;
 	vk::Pipeline getDepthPipeline() const;
 
+	vk::PipelineLayout getSkyPipelineLayout() const;
+	vk::Pipeline getSkyPipeline() const;
+
+	vk::DescriptorSet getSkySet() const;
+
 	vk::PipelineLayout getMaterialPipelineLayout() const;
 	vk::Pipeline getMaterialPipeline() const;
 
-	std::array<vk::DescriptorSet, 2> getMaterialSets() const;
+	std::array<vk::DescriptorSet, 3> getMaterialSets() const;
 
 	vk::DescriptorPool getDescriptorPool() const;
 	vk::DescriptorSetLayout getTextureLayout() const;

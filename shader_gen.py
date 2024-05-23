@@ -3,13 +3,15 @@
 import os
 import subprocess
 
-shader_dir = 'src/rendering/shaders/'
+SHADER_DIRECTORIES = ['src/rendering/shaders', 'src/rendering/effects/shaders']
 
-def find_files(dir: str) -> list[str]:
+def find_files(dirs: list[str]) -> list[str]:
     files: list[str] = []
-    for (_, _, filenames) in os.walk(dir):
-        files.extend(filenames)
-        break
+
+    for dir in dirs:
+        for (dirpath, _, filenames) in os.walk(dir):
+            for filename in filenames:
+                files.append(dirpath + "/" + filename)
 
     return files
 
@@ -19,7 +21,11 @@ def compile_shader(path: str) -> list[str]:
     # -V: create SPIR-V binary
     # -x: save binary output as text-based 32-bit hexadecimal numbers
     # -o: output file
-    subprocess.run(["glslc", "-c", "-mfmt=num", path, "-o", out])
+    result = subprocess.run(["glslc", "-c", "-mfmt=num", path, "-o", out])
+
+    if result.returncode != 0:
+        return []
+
     file = open(out, 'r')
 
     txt: str = ''
@@ -35,12 +41,28 @@ def compile_shader(path: str) -> list[str]:
 
 class ShaderData:
     name: str
+    path: str
     vertex_code: list[str]
     fragment_code: list[str]
+    compute_code: list[str]
+    is_compute: bool = False
 
 def generate_header(shader: ShaderData):
     define: str = shader.name.upper() + '_SHADER_GEN_H'
     name: str = shader.name.title() + 'Shader'
+    name = name.replace("_", "")
+
+    body: str = ""
+
+    if shader.is_compute == True:
+        compute: str = ','.join(shader.compute_code)
+        body += f"\tconstexpr static const uint32_t computeCode[] = {{{compute}}};"
+    else:
+        vertex: str = ','.join(shader.vertex_code)
+        body += f"\tconstexpr static const uint32_t vertexCode[] = {{{vertex}}};"
+
+        fragment: str = ','.join(shader.fragment_code)
+        body += f"\n\tconstexpr static const uint32_t fragmentCode[] = {{{fragment}}};"
 
     header = f"""// THIS FILE IS GENERATED; DO NOT EDIT!
 #ifndef {define}
@@ -50,14 +72,16 @@ def generate_header(shader: ShaderData):
 
 class {name} {{
 public:
-    constexpr static const uint32_t vertexCode[] = {{{','.join(shader.vertex_code)}}};
-    constexpr static const uint32_t fragmentCode[] = {{{','.join(shader.fragment_code)}}};
+{body}
 }};
 
 #endif // !{define}
 """
 
-    file = open(f'{shader_dir}{shader.name}.gen.h', 'w')
+
+    path, _ = os.path.splitext(shader.path)
+
+    file = open(f'{path}.gen.h', 'w')
     file.write(header)
     file.close()
 
@@ -65,10 +89,11 @@ def main():
     names: list[str] = []
     data: list[ShaderData] = []
 
-    for filename in find_files(shader_dir):
+    for file in find_files(SHADER_DIRECTORIES):
+        filename = file.split('/')[-1]
         name, ext = os.path.splitext(filename)
 
-        if ext != ".vert" and ext != ".frag":
+        if ext != ".vert" and ext != ".frag" and ext != ".comp":
             continue
 
         if name not in names:
@@ -76,16 +101,20 @@ def main():
 
             shader = ShaderData()
             shader.name = name
+            shader.path = file
             data.append(shader)
 
         idx: int = names.index(name)
 
-        spirv = compile_shader(f'{shader_dir}{filename}')
+        spirv = compile_shader(f'{file}')
 
         if ext == ".vert":
             data[idx].vertex_code = spirv
-        else:
+        elif ext == ".frag":
             data[idx].fragment_code = spirv
+        else:
+            data[idx].is_compute = True;
+            data[idx].compute_code = spirv
 
 
     for shader in data:

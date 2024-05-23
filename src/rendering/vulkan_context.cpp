@@ -221,11 +221,15 @@ vk::Device createDevice(
 	vk::PhysicalDeviceFeatures deviceFeatures{};
 	deviceFeatures.samplerAnisotropy = VK_TRUE;
 
+	vk::PhysicalDeviceMultiviewFeaturesKHR multiviewFeatures = {};
+	multiviewFeatures.multiview = VK_TRUE;
+
 	vk::DeviceCreateInfo createInfo = {};
 	createInfo.setQueueCreateInfos(queueCreateInfos);
 	createInfo.setPEnabledFeatures(&deviceFeatures);
 	createInfo.setEnabledExtensionCount(DEVICE_EXTENSIONS.size());
 	createInfo.setPpEnabledExtensionNames(DEVICE_EXTENSIONS.data());
+	createInfo.setPNext(&multiviewFeatures);
 
 	if (useValidation) {
 		createInfo.setEnabledLayerCount(VALIDATION_LAYERS.size());

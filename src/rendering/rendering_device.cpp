@@ -10,14 +10,19 @@
 
 #include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"
+#include "shaders/sky.gen.h"
 #include "shaders/tonemap.gen.h"
 
 #include "types/allocated.h"
 #include "types/vertex.h"
 
+#include "effects/environment_effects.h"
+
 #include "../image.h"
 
 #include "rendering_device.h"
+
+#include "../image_loader.h"
 
 static vk::Format getVkFormat(Image::Format format) {
 	switch (format) {
@@ -150,8 +155,8 @@ vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexStage,
 	return result.value;
 }
 
-void RD::_generateMipmaps(
-		vk::Image image, int32_t width, int32_t height, vk::Format format, uint32_t mipLevels) {
+void RD::_generateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Format format,
+		uint32_t mipLevels, uint32_t arrayLayers) {
 	vk::FormatProperties properties = _pContext->getPhysicalDevice().getFormatProperties(format);
 
 	bool isBlittingSupported = (bool)(properties.optimalTilingFeatures &
@@ -165,7 +170,7 @@ void RD::_generateMipmaps(
 	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
 	subresourceRange.setLevelCount(1);
 	subresourceRange.setBaseArrayLayer(0);
-	subresourceRange.setLayerCount(1);
+	subresourceRange.setLayerCount(arrayLayers);
 
 	vk::ImageMemoryBarrier barrier;
 	barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
@@ -200,13 +205,13 @@ void RD::_generateMipmaps(
 		srcSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
 		srcSubresource.setMipLevel(i - 1);
 		srcSubresource.setBaseArrayLayer(0);
-		srcSubresource.setLayerCount(1);
+		srcSubresource.setLayerCount(arrayLayers);
 
 		vk::ImageSubresourceLayers dstSubresource;
 		dstSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
 		dstSubresource.setMipLevel(i);
 		dstSubresource.setBaseArrayLayer(0);
-		dstSubresource.setLayerCount(1);
+		dstSubresource.setLayerCount(arrayLayers);
 
 		vk::ImageBlit blit;
 		blit.setSrcOffsets(srcOffsets);
@@ -333,8 +338,15 @@ AllocatedImage RD::imageCreate(uint32_t width, uint32_t height, vk::Format forma
 	return AllocatedImage::create(_allocator, width, height, mipLevels, 1, format, usage);
 }
 
+AllocatedImage RD::imageCubeCreate(
+		uint32_t size, vk::Format format, uint32_t mipLevels, vk::ImageUsageFlags usage) {
+	uint32_t arrayLayers = 6;
+	return AllocatedImage::create(_allocator, size, size, mipLevels, arrayLayers, format, usage,
+			vk::ImageCreateFlagBits::eCubeCompatible);
+}
+
 void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
-		vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
+		uint32_t arrayLayers, vk::ImageLayout oldLayout, vk::ImageLayout newLayout) {
 	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	vk::ImageSubresourceRange subresourceRange;
@@ -342,7 +354,7 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 	subresourceRange.setBaseMipLevel(0);
 	subresourceRange.setLevelCount(mipLevels);
 	subresourceRange.setBaseArrayLayer(0);
-	subresourceRange.setLayerCount(1);
+	subresourceRange.setLayerCount(arrayLayers);
 
 	vk::ImageMemoryBarrier barrier;
 	barrier.setOldLayout(oldLayout);
@@ -369,6 +381,54 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 
 		sourceStage = vk::PipelineStageFlagBits::eTransfer;
 		destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
+	} else if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eGeneral) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
+	} else if (oldLayout == vk::ImageLayout::eGeneral &&
+			   newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
+	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+			   newLayout == vk::ImageLayout::eGeneral) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
+
+		sourceStage = vk::PipelineStageFlagBits::eTransfer;
+		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
+	} else if (oldLayout == vk::ImageLayout::eGeneral &&
+			   newLayout == vk::ImageLayout::eTransferDstOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eTransfer;
+	} else if (oldLayout == vk::ImageLayout::eColorAttachmentOptimal &&
+			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eTransfer;
+	} else if (oldLayout == vk::ImageLayout::eUndefined &&
+			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferRead);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eTransfer;
+	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
+
+		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		destinationStage = vk::PipelineStageFlagBits::eTransfer;
 	} else {
 		throw std::invalid_argument("Unsupported layout transition!");
 	}
@@ -378,21 +438,94 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 	endSingleTimeCommands(commandBuffer);
 }
 
+void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size) {
+	VmaAllocationInfo stagingAllocInfo;
+	vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eTransferSrc;
+
+	AllocatedBuffer stagingBuffer = bufferCreate(usage, size, &stagingAllocInfo);
+	memcpy(stagingAllocInfo.pMappedData, pData, size);
+	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
+
+	bufferCopyToImage(stagingBuffer.buffer, image, width, height);
+
+	bufferDestroy(stagingBuffer);
+}
+
+AllocatedImage RD::imageCopyToCube(
+		vk::Image image, uint32_t width, uint32_t height, vk::Format format) {
+	assert(format == vk::Format::eR32G32B32A32Sfloat);
+
+	AllocatedImage staging = imageCreate(width, height, format, 1,
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage);
+
+	imageLayoutTransition(staging.image, format, 1, 1, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	vk::ImageSubresourceLayers subresource = {};
+	subresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	subresource.setMipLevel(0);
+	subresource.setBaseArrayLayer(0);
+	subresource.setLayerCount(1);
+
+	vk::ImageCopy copyInfo = {};
+	copyInfo.setSrcSubresource(subresource);
+	copyInfo.setDstSubresource(subresource);
+	copyInfo.setExtent(vk::Extent3D(width, height, 1));
+
+	{
+		vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		commandBuffer.copyImage(image, vk::ImageLayout::eTransferSrcOptimal, staging.image,
+				vk::ImageLayout::eTransferDstOptimal, copyInfo);
+
+		endSingleTimeCommands(commandBuffer);
+	}
+
+	// TODO: Use smallest dimension as size
+	uint32_t size = height;
+
+	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(size))) + 1;
+
+	AllocatedImage cube = imageCubeCreate(size, format, mipLevels,
+			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
+					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+	imageLayoutTransition(staging.image, format, 1, 1, vk::ImageLayout::eTransferDstOptimal,
+			vk::ImageLayout::eGeneral);
+
+	imageLayoutTransition(cube.image, format, mipLevels, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eGeneral);
+
+	vk::ImageView stagingView = imageViewCreate(staging.image, format, 1);
+	vk::ImageView cubeView =
+			imageViewCreate(cube.image, format, mipLevels, 6, vk::ImageViewType::eCube);
+
+	_environmentEffects.imageCopyToCube(stagingView, cubeView, size);
+
+	imageViewDestroy(stagingView);
+	imageViewDestroy(cubeView);
+
+	imageDestroy(staging);
+
+	return cube;
+}
+
 void RD::imageDestroy(AllocatedImage image) {
 	vmaDestroyImage(_allocator, image.image, image.allocation);
 }
 
-vk::ImageView RD::imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels) {
+vk::ImageView RD::imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels,
+		uint32_t arrayLayers, vk::ImageViewType viewType) {
 	vk::ImageSubresourceRange subresourceRange;
 	subresourceRange.setAspectMask(vk::ImageAspectFlagBits::eColor);
 	subresourceRange.setBaseMipLevel(0);
 	subresourceRange.setLevelCount(mipLevels);
 	subresourceRange.setBaseArrayLayer(0);
-	subresourceRange.setLayerCount(1);
+	subresourceRange.setLayerCount(arrayLayers);
 
 	vk::ImageViewCreateInfo createInfo;
 	createInfo.setImage(image);
-	createInfo.setViewType(vk::ImageViewType::e2D);
+	createInfo.setViewType(viewType);
 	createInfo.setFormat(format);
 	createInfo.setSubresourceRange(subresourceRange);
 
@@ -408,7 +541,7 @@ vk::Sampler RD::samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLo
 	float maxAnisotropy = properties.limits.maxSamplerAnisotropy;
 
 	vk::SamplerMipmapMode mipmapMode = vk::SamplerMipmapMode::eLinear;
-	vk::SamplerAddressMode repeatMode = vk::SamplerAddressMode::eRepeat;
+	vk::SamplerAddressMode repeatMode = vk::SamplerAddressMode::eClampToEdge;
 
 	vk::SamplerCreateInfo createInfo;
 	createInfo.setMagFilter(filter);
@@ -453,7 +586,7 @@ TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 	memcpy(stagingAllocInfo.pMappedData, data.data(), data.size());
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
 
-	imageLayoutTransition(allocatedImage.image, format, mipLevels, vk::ImageLayout::eUndefined,
+	imageLayoutTransition(allocatedImage.image, format, mipLevels, 1, vk::ImageLayout::eUndefined,
 			vk::ImageLayout::eTransferDstOptimal);
 
 	bufferCopyToImage(stagingBuffer.buffer, allocatedImage.image, width, height);
@@ -496,6 +629,10 @@ vk::Instance RD::getInstance() const {
 	return _pContext->getInstance();
 }
 
+vk::PhysicalDevice RD::getPhysicalDevice() const {
+	return _pContext->getPhysicalDevice();
+}
+
 vk::Device RD::getDevice() const {
 	return _pContext->getDevice();
 }
@@ -512,6 +649,18 @@ vk::Pipeline RD::getDepthPipeline() const {
 	return _depthPipeline;
 }
 
+vk::PipelineLayout RD::getSkyPipelineLayout() const {
+	return _skyLayout;
+}
+
+vk::Pipeline RD::getSkyPipeline() const {
+	return _skyPipeline;
+}
+
+vk::DescriptorSet RD::getSkySet() const {
+	return _skySet;
+}
+
 vk::PipelineLayout RD::getMaterialPipelineLayout() const {
 	return _materialLayout;
 }
@@ -520,8 +669,8 @@ vk::Pipeline RD::getMaterialPipeline() const {
 	return _materialPipeline;
 }
 
-std::array<vk::DescriptorSet, 2> RD::getMaterialSets() const {
-	return { _uniformSets[_frame], _lightStorage.getLightSet() };
+std::array<vk::DescriptorSet, 3> RD::getMaterialSets() const {
+	return { _uniformSets[_frame], _iblSet, _lightStorage.getLightSet() };
 }
 
 vk::DescriptorPool RD::getDescriptorPool() const {
@@ -887,6 +1036,72 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 			throw std::runtime_error("Texture descriptor set layout creation failed!");
 	}
 
+	// sky
+
+	{
+		vk::DescriptorSetLayoutBinding binding;
+		binding.setBinding(0);
+		binding.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		binding.setDescriptorCount(1);
+		binding.setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
+		vk::DescriptorSetLayoutCreateInfo createInfo;
+		createInfo.setBindings(binding);
+
+		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_skySetLayout);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Sky descriptor set layout creation failed!");
+
+		vk::DescriptorSetAllocateInfo allocInfo;
+		allocInfo.setDescriptorPool(_descriptorPool);
+		allocInfo.setDescriptorSetCount(1);
+		allocInfo.setSetLayouts(_skySetLayout);
+
+		err = device.allocateDescriptorSets(&allocInfo, &_skySet);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Sky descriptor set allocation failed!");
+	}
+
+	// ibl
+
+	{
+		std::array<vk::DescriptorSetLayoutBinding, 3> bindings;
+		bindings[0].setBinding(0);
+		bindings[0].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		bindings[0].setDescriptorCount(1);
+		bindings[0].setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
+		bindings[1].setBinding(1);
+		bindings[1].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		bindings[1].setDescriptorCount(1);
+		bindings[1].setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
+		bindings[2].setBinding(2);
+		bindings[2].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		bindings[2].setDescriptorCount(1);
+		bindings[2].setStageFlags(vk::ShaderStageFlagBits::eFragment);
+
+		vk::DescriptorSetLayoutCreateInfo createInfo;
+		createInfo.setBindings(bindings);
+
+		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_iblSetLayout);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("IBL descriptor set layout creation failed!");
+
+		vk::DescriptorSetAllocateInfo allocInfo;
+		allocInfo.setDescriptorPool(_descriptorPool);
+		allocInfo.setDescriptorSetCount(1);
+		allocInfo.setSetLayouts(_iblSetLayout);
+
+		err = device.allocateDescriptorSets(&allocInfo, &_iblSet);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("IBL descriptor set allocation failed!");
+	}
+
 	vk::PushConstantRange pushConstant;
 	pushConstant.setStageFlags(vk::ShaderStageFlagBits::eVertex);
 	pushConstant.setOffset(0);
@@ -922,6 +1137,34 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		device.destroyShaderModule(fragmentStage);
 	}
 
+	// sky
+
+	{
+		SkyShader shader;
+
+		size_t codeSize = sizeof(shader.vertexCode);
+		vk::ShaderModule vertexStage = createShaderModule(device, shader.vertexCode, codeSize);
+
+		codeSize = sizeof(shader.fragmentCode);
+		vk::ShaderModule fragmentStage = createShaderModule(device, shader.fragmentCode, codeSize);
+
+		vk::PushConstantRange pushConstant;
+		pushConstant.setStageFlags(vk::ShaderStageFlagBits::eFragment);
+		pushConstant.setOffset(0);
+		pushConstant.setSize(sizeof(SkyConstants));
+
+		vk::PipelineLayoutCreateInfo createInfo = {};
+		createInfo.setSetLayouts(_skySetLayout);
+		createInfo.setPushConstantRanges(pushConstant);
+
+		_skyLayout = device.createPipelineLayout(createInfo);
+		_skyPipeline = createPipeline(
+				device, vertexStage, fragmentStage, _skyLayout, _pContext->getRenderPass(), 1, {});
+
+		device.destroyShaderModule(vertexStage);
+		device.destroyShaderModule(fragmentStage);
+	}
+
 	// material
 
 	{
@@ -933,8 +1176,9 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		codeSize = sizeof(shader.fragmentCode);
 		vk::ShaderModule fragmentStage = createShaderModule(device, shader.fragmentCode, codeSize);
 
-		std::array<vk::DescriptorSetLayout, 3> layouts = {
+		std::array<vk::DescriptorSetLayout, 4> layouts = {
 			_uniformLayout,
+			_iblSetLayout,
 			_lightStorage.getLightSetLayout(),
 			_textureLayout,
 		};
@@ -977,6 +1221,147 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		device.destroyShaderModule(vertexStage);
 		device.destroyShaderModule(fragmentStage);
+	}
+
+	_environmentEffects.init();
+
+	{
+		AllocatedImage brdf;
+		vk::ImageView brdfView;
+		vk::Sampler brdfSampler;
+
+		{
+			uint32_t size = 256;
+			vk::Format format = vk::Format::eR16G16Sfloat;
+
+			brdf = imageCreate(size, size, format, 1,
+					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+			brdfView = imageViewCreate(brdf.image, format, 1);
+			brdfSampler = samplerCreate(vk::Filter::eLinear, 1);
+
+			imageLayoutTransition(brdf.image, format, 1, 1, vk::ImageLayout::eUndefined,
+					vk::ImageLayout::eGeneral);
+
+			_environmentEffects.generateBrdf(brdfView, size);
+
+			imageLayoutTransition(brdf.image, format, 1, 1, vk::ImageLayout::eGeneral,
+					vk::ImageLayout::eShaderReadOnlyOptimal);
+		}
+
+		vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+
+		Image *pImage = ImageLoader::loadHDRFromFile("sky.hdr");
+
+		uint32_t width = pImage->getWidth();
+		uint32_t height = pImage->getHeight();
+
+		std::vector<uint8_t> data = pImage->getData();
+
+		AllocatedImage sky = imageCreate(width, height, format, 1,
+				vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst);
+
+		imageLayoutTransition(sky.image, format, 1, 1, vk::ImageLayout::eUndefined,
+				vk::ImageLayout::eTransferDstOptimal);
+
+		imageSend(sky.image, width, height, data.data(), data.size());
+
+		imageLayoutTransition(sky.image, format, 1, 1, vk::ImageLayout::eTransferDstOptimal,
+				vk::ImageLayout::eTransferSrcOptimal);
+
+		uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(height))) + 1;
+
+		AllocatedImage skyCube = imageCopyToCube(sky.image, width, height, format);
+
+		imageLayoutTransition(skyCube.image, format, mipLevels, 6, vk::ImageLayout::eGeneral,
+				vk::ImageLayout::eTransferDstOptimal);
+
+		_generateMipmaps(skyCube.image, height, height, format, mipLevels, 6);
+
+		vk::ImageView skyCubeView =
+				imageViewCreate(skyCube.image, format, mipLevels, 6, vk::ImageViewType::eCube);
+
+		vk::Sampler skyCubeSampler = samplerCreate(vk::Filter::eLinear, mipLevels);
+
+		AllocatedImage irradiance = _environmentEffects.filterIrradiance(skyCubeView);
+		AllocatedImage specular =
+				_environmentEffects.filterSpecular(skyCubeView, height, mipLevels);
+
+		vk::ImageView irradianceView =
+				imageViewCreate(irradiance.image, format, 1, 6, vk::ImageViewType::eCube);
+
+		vk::Sampler irradianceSampler = samplerCreate(vk::Filter::eLinear, 1);
+
+		vk::ImageView specularView =
+				imageViewCreate(specular.image, format, 5, 6, vk::ImageViewType::eCube);
+
+		vk::Sampler specularSampler = samplerCreate(vk::Filter::eLinear, 5);
+
+		{
+			vk::DescriptorImageInfo imageInfo;
+			imageInfo.setImageView(skyCubeView);
+			imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+			imageInfo.setSampler(skyCubeSampler);
+
+			vk::WriteDescriptorSet writeInfo;
+			writeInfo.setDstSet(_skySet);
+			writeInfo.setDstBinding(0);
+			writeInfo.setDstArrayElement(0);
+			writeInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+			writeInfo.setDescriptorCount(1);
+			writeInfo.setImageInfo(imageInfo);
+
+			device.updateDescriptorSets(writeInfo, nullptr);
+		}
+
+		{
+			vk::DescriptorImageInfo irradianceImageInfo;
+			irradianceImageInfo.setImageView(irradianceView);
+			irradianceImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+			irradianceImageInfo.setSampler(irradianceSampler);
+
+			vk::DescriptorImageInfo specularImageInfo;
+			specularImageInfo.setImageView(specularView);
+			specularImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+			specularImageInfo.setSampler(specularSampler);
+
+			vk::DescriptorImageInfo brdfLUTImageInfo;
+			brdfLUTImageInfo.setImageView(brdfView);
+			brdfLUTImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+			brdfLUTImageInfo.setSampler(brdfSampler);
+
+			vk::WriteDescriptorSet irradianceWriteInfo;
+			irradianceWriteInfo.setDstSet(_iblSet);
+			irradianceWriteInfo.setDstBinding(0);
+			irradianceWriteInfo.setDstArrayElement(0);
+			irradianceWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+			irradianceWriteInfo.setDescriptorCount(1);
+			irradianceWriteInfo.setImageInfo(irradianceImageInfo);
+
+			vk::WriteDescriptorSet specularWriteInfo;
+			specularWriteInfo.setDstSet(_iblSet);
+			specularWriteInfo.setDstBinding(1);
+			specularWriteInfo.setDstArrayElement(0);
+			specularWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+			specularWriteInfo.setDescriptorCount(1);
+			specularWriteInfo.setImageInfo(specularImageInfo);
+
+			vk::WriteDescriptorSet brdfLUTWriteInfo;
+			brdfLUTWriteInfo.setDstSet(_iblSet);
+			brdfLUTWriteInfo.setDstBinding(2);
+			brdfLUTWriteInfo.setDstArrayElement(0);
+			brdfLUTWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+			brdfLUTWriteInfo.setDescriptorCount(1);
+			brdfLUTWriteInfo.setImageInfo(brdfLUTImageInfo);
+
+			std::array<vk::WriteDescriptorSet, 3> writeInfos = {
+				irradianceWriteInfo,
+				specularWriteInfo,
+				brdfLUTWriteInfo,
+			};
+
+			device.updateDescriptorSets(writeInfos, nullptr);
+		}
 	}
 }
 

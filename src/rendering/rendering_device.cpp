@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 
@@ -21,8 +22,6 @@
 #include "../image.h"
 
 #include "rendering_device.h"
-
-#include "../image_loader.h"
 
 static vk::Format getVkFormat(Image::Format format) {
 	switch (format) {
@@ -249,6 +248,50 @@ void RD::_generateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Fo
 	endSingleTimeCommands(commandBuffer);
 }
 
+AllocatedImage RD::_filterIrradiance(vk::ImageView srcCubemapView) {
+	uint32_t size = 32;
+	vk::ImageUsageFlags usage =
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+
+	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+
+	AllocatedImage irradiance = imageCubeCreate(size, format, 1, usage);
+
+	imageLayoutTransition(irradiance.image, format, 1, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	_environmentEffects.filterIrradiance(srcCubemapView, irradiance.image, format, size);
+
+	imageLayoutTransition(irradiance.image, format, 1, 6, vk::ImageLayout::eTransferDstOptimal,
+			vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	return irradiance;
+}
+
+AllocatedImage RD::_filterSpecular(
+		vk::ImageView srcCubemapView, uint32_t size, uint32_t mipLevels) {
+	uint32_t outputSize = 128;
+	uint32_t levels = 5;
+
+	vk::ImageUsageFlags usage =
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+
+	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+
+	AllocatedImage specular = imageCubeCreate(outputSize, format, levels, usage);
+
+	imageLayoutTransition(specular.image, format, levels, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	_environmentEffects.filterSpecular(
+			srcCubemapView, size, mipLevels, format, specular.image, outputSize, levels);
+
+	imageLayoutTransition(specular.image, format, levels, 6, vk::ImageLayout::eTransferDstOptimal,
+			vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	return specular;
+}
+
 vk::CommandBuffer RD::beginSingleTimeCommands() {
 	vk::CommandBufferAllocateInfo allocInfo;
 	allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
@@ -294,7 +337,8 @@ void RD::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize s
 	endSingleTimeCommands(commandBuffer);
 }
 
-void RD::bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) {
+void RD::bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height,
+		vk::ImageLayout layout) {
 	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	vk::ImageSubresourceLayers imageSubresource;
@@ -311,7 +355,7 @@ void RD::bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, u
 	region.setImageOffset(vk::Offset3D{ 0, 0, 0 });
 	region.setImageExtent(vk::Extent3D{ width, height, 1 });
 
-	commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, region);
+	commandBuffer.copyBufferToImage(buffer, image, layout, region);
 
 	endSingleTimeCommands(commandBuffer);
 }
@@ -389,45 +433,24 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
 	} else if (oldLayout == vk::ImageLayout::eGeneral &&
 			   newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eShaderWrite);
+		barrier.setDstAccessMask(vk::AccessFlagBits::eShaderRead);
 
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
-	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
-			   newLayout == vk::ImageLayout::eGeneral) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
-
-		sourceStage = vk::PipelineStageFlagBits::eTransfer;
-		destinationStage = vk::PipelineStageFlagBits::eComputeShader;
+		sourceStage = vk::PipelineStageFlagBits::eComputeShader;
+		destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
 	} else if (oldLayout == vk::ImageLayout::eGeneral &&
 			   newLayout == vk::ImageLayout::eTransferDstOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eShaderWrite);
 		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
 
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		sourceStage = vk::PipelineStageFlagBits::eComputeShader;
 		destinationStage = vk::PipelineStageFlagBits::eTransfer;
 	} else if (oldLayout == vk::ImageLayout::eColorAttachmentOptimal &&
 			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
-
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-		destinationStage = vk::PipelineStageFlagBits::eTransfer;
-	} else if (oldLayout == vk::ImageLayout::eUndefined &&
-			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+		barrier.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentWrite);
 		barrier.setDstAccessMask(vk::AccessFlagBits::eTransferRead);
 
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
-		destinationStage = vk::PipelineStageFlagBits::eTransfer;
-	} else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
-			   newLayout == vk::ImageLayout::eTransferSrcOptimal) {
-		barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
-		barrier.setDstAccessMask(vk::AccessFlagBits::eNone);
-
-		sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		sourceStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 		destinationStage = vk::PipelineStageFlagBits::eTransfer;
 	} else {
 		throw std::invalid_argument("Unsupported layout transition!");
@@ -438,7 +461,8 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 	endSingleTimeCommands(commandBuffer);
 }
 
-void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size) {
+void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size,
+		vk::ImageLayout layout) {
 	VmaAllocationInfo stagingAllocInfo;
 	vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eTransferSrc;
 
@@ -446,68 +470,9 @@ void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pD
 	memcpy(stagingAllocInfo.pMappedData, pData, size);
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
 
-	bufferCopyToImage(stagingBuffer.buffer, image, width, height);
+	bufferCopyToImage(stagingBuffer.buffer, image, width, height, layout);
 
 	bufferDestroy(stagingBuffer);
-}
-
-AllocatedImage RD::imageCopyToCube(
-		vk::Image image, uint32_t width, uint32_t height, vk::Format format) {
-	assert(format == vk::Format::eR32G32B32A32Sfloat);
-
-	AllocatedImage staging = imageCreate(width, height, format, 1,
-			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage);
-
-	imageLayoutTransition(staging.image, format, 1, 1, vk::ImageLayout::eUndefined,
-			vk::ImageLayout::eTransferDstOptimal);
-
-	vk::ImageSubresourceLayers subresource = {};
-	subresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
-	subresource.setMipLevel(0);
-	subresource.setBaseArrayLayer(0);
-	subresource.setLayerCount(1);
-
-	vk::ImageCopy copyInfo = {};
-	copyInfo.setSrcSubresource(subresource);
-	copyInfo.setDstSubresource(subresource);
-	copyInfo.setExtent(vk::Extent3D(width, height, 1));
-
-	{
-		vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
-
-		commandBuffer.copyImage(image, vk::ImageLayout::eTransferSrcOptimal, staging.image,
-				vk::ImageLayout::eTransferDstOptimal, copyInfo);
-
-		endSingleTimeCommands(commandBuffer);
-	}
-
-	// TODO: Use smallest dimension as size
-	uint32_t size = height;
-
-	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(size))) + 1;
-
-	AllocatedImage cube = imageCubeCreate(size, format, mipLevels,
-			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
-					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
-
-	imageLayoutTransition(staging.image, format, 1, 1, vk::ImageLayout::eTransferDstOptimal,
-			vk::ImageLayout::eGeneral);
-
-	imageLayoutTransition(cube.image, format, mipLevels, 6, vk::ImageLayout::eUndefined,
-			vk::ImageLayout::eGeneral);
-
-	vk::ImageView stagingView = imageViewCreate(staging.image, format, 1);
-	vk::ImageView cubeView =
-			imageViewCreate(cube.image, format, mipLevels, 6, vk::ImageViewType::eCube);
-
-	_environmentEffects.imageCopyToCube(stagingView, cubeView, size);
-
-	imageViewDestroy(stagingView);
-	imageViewDestroy(cubeView);
-
-	imageDestroy(staging);
-
-	return cube;
 }
 
 void RD::imageDestroy(AllocatedImage image) {
@@ -610,6 +575,137 @@ void RD::textureDestroy(TextureRD texture) {
 	imageDestroy(texture.image);
 	imageViewDestroy(texture.imageView);
 	samplerDestroy(texture.sampler);
+}
+
+void RD::environmentSkyUpdate(const std::shared_ptr<Image> image) {
+	uint32_t width = image->getWidth();
+	uint32_t height = image->getHeight();
+
+	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+	std::vector<uint8_t> data = image->getData();
+
+	uint32_t size = std::min(width, height);
+	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(size))) + 1;
+
+	AllocatedImage staging = imageCreate(width, height, format, 1,
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eStorage);
+
+	imageLayoutTransition(
+			staging.image, format, 1, 1, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+
+	imageSend(staging.image, width, height, data.data(), data.size(), vk::ImageLayout::eGeneral);
+
+	AllocatedImage cubemap = imageCubeCreate(size, format, mipLevels,
+			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
+					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+	imageLayoutTransition(cubemap.image, format, mipLevels, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eGeneral);
+
+	vk::ImageView stagingView = imageViewCreate(staging.image, format, 1);
+	vk::ImageView cubemapView =
+			imageViewCreate(cubemap.image, format, mipLevels, 6, vk::ImageViewType::eCube);
+
+	_environmentEffects.imageCopyToCube(stagingView, cubemapView, size);
+
+	imageViewDestroy(stagingView);
+
+	imageLayoutTransition(cubemap.image, format, mipLevels, 6, vk::ImageLayout::eGeneral,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	_generateMipmaps(cubemap.image, size, size, format, mipLevels, 6);
+
+	vk::Sampler cubemapSampler = samplerCreate(vk::Filter::eLinear, mipLevels);
+
+	AllocatedImage irradiance = _filterIrradiance(cubemapView);
+	vk::ImageView irradianceView =
+			imageViewCreate(irradiance.image, format, 1, 6, vk::ImageViewType::eCube);
+	vk::Sampler irradianceSampler = samplerCreate(vk::Filter::eLinear, 1);
+
+	AllocatedImage specular = _filterSpecular(cubemapView, size, mipLevels);
+	vk::ImageView specularView =
+			imageViewCreate(specular.image, format, 5, 6, vk::ImageViewType::eCube);
+	vk::Sampler specularSampler = samplerCreate(vk::Filter::eLinear, 5);
+
+	{
+		vk::DescriptorImageInfo imageInfo;
+		imageInfo.setImageView(cubemapView);
+		imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+		imageInfo.setSampler(cubemapSampler);
+
+		vk::WriteDescriptorSet writeInfo;
+		writeInfo.setDstSet(_skySet);
+		writeInfo.setDstBinding(0);
+		writeInfo.setDstArrayElement(0);
+		writeInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		writeInfo.setDescriptorCount(1);
+		writeInfo.setImageInfo(imageInfo);
+
+		_pContext->getDevice().updateDescriptorSets(writeInfo, nullptr);
+	}
+
+	{
+		vk::DescriptorImageInfo irradianceImageInfo;
+		irradianceImageInfo.setImageView(irradianceView);
+		irradianceImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+		irradianceImageInfo.setSampler(irradianceSampler);
+
+		vk::DescriptorImageInfo specularImageInfo;
+		specularImageInfo.setImageView(specularView);
+		specularImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+		specularImageInfo.setSampler(specularSampler);
+
+		vk::WriteDescriptorSet irradianceWriteInfo;
+		irradianceWriteInfo.setDstSet(_iblSet);
+		irradianceWriteInfo.setDstBinding(0);
+		irradianceWriteInfo.setDstArrayElement(0);
+		irradianceWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		irradianceWriteInfo.setDescriptorCount(1);
+		irradianceWriteInfo.setImageInfo(irradianceImageInfo);
+
+		vk::WriteDescriptorSet specularWriteInfo;
+		specularWriteInfo.setDstSet(_iblSet);
+		specularWriteInfo.setDstBinding(1);
+		specularWriteInfo.setDstArrayElement(0);
+		specularWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		specularWriteInfo.setDescriptorCount(1);
+		specularWriteInfo.setImageInfo(specularImageInfo);
+
+		std::array<vk::WriteDescriptorSet, 2> writeInfos = {
+			irradianceWriteInfo,
+			specularWriteInfo,
+		};
+
+		_pContext->getDevice().updateDescriptorSets(writeInfos, nullptr);
+	}
+
+	{
+		EnvironmentData data = _environmentData;
+
+		imageDestroy(data.cubemap);
+		imageViewDestroy(data.cubemapView);
+		samplerDestroy(data.cubemapSampler);
+
+		imageDestroy(data.irradiance);
+		imageViewDestroy(data.irradianceView);
+		samplerDestroy(data.irradianceSampler);
+
+		imageDestroy(data.specular);
+		imageViewDestroy(data.specularView);
+		samplerDestroy(data.specularSampler);
+
+		_environmentData = {
+			cubemap,
+			cubemapView,
+			cubemapSampler,
+			irradiance,
+			irradianceView,
+			irradianceSampler,
+			specular,
+			specularView,
+			specularSampler,
+		};
+	}
 }
 
 void RD::updateUniformBuffer(const glm::vec3 &viewPosition) {
@@ -1223,145 +1319,52 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		device.destroyShaderModule(fragmentStage);
 	}
 
-	_environmentEffects.init();
+	{
+		_environmentEffects.init();
+
+		uint32_t brdfSize = 256;
+		vk::Format brdfFormat = vk::Format::eR16G16Sfloat;
+
+		_brdfLut = imageCreate(brdfSize, brdfSize, brdfFormat, 1,
+				vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+		_brdfView = imageViewCreate(_brdfLut.image, brdfFormat, 1);
+		_brdfSampler = samplerCreate(vk::Filter::eLinear, 1);
+
+		imageLayoutTransition(_brdfLut.image, brdfFormat, 1, 1, vk::ImageLayout::eUndefined,
+				vk::ImageLayout::eGeneral);
+
+		_environmentEffects.generateBrdf(_brdfView, brdfSize);
+
+		imageLayoutTransition(_brdfLut.image, brdfFormat, 1, 1, vk::ImageLayout::eGeneral,
+				vk::ImageLayout::eShaderReadOnlyOptimal);
+
+		vk::DescriptorImageInfo imageInfo;
+		imageInfo.setImageView(_brdfView);
+		imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
+		imageInfo.setSampler(_brdfSampler);
+
+		vk::WriteDescriptorSet writeInfo;
+		writeInfo.setDstSet(_iblSet);
+		writeInfo.setDstBinding(2);
+		writeInfo.setDstArrayElement(0);
+		writeInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
+		writeInfo.setDescriptorCount(1);
+		writeInfo.setImageInfo(imageInfo);
+
+		device.updateDescriptorSets(writeInfo, nullptr);
+	}
 
 	{
-		AllocatedImage brdf;
-		vk::ImageView brdfView;
-		vk::Sampler brdfSampler;
+		float pData[8] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 
-		{
-			uint32_t size = 256;
-			vk::Format format = vk::Format::eR16G16Sfloat;
+		std::vector<uint8_t> data;
+		data.resize(sizeof(float) * 8);
+		memcpy(data.data(), pData, sizeof(float) * 8);
 
-			brdf = imageCreate(size, size, format, 1,
-					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+		std::shared_ptr<Image> image(new Image(2, 1, Image::Format::RGBA32F, data));
 
-			brdfView = imageViewCreate(brdf.image, format, 1);
-			brdfSampler = samplerCreate(vk::Filter::eLinear, 1);
-
-			imageLayoutTransition(brdf.image, format, 1, 1, vk::ImageLayout::eUndefined,
-					vk::ImageLayout::eGeneral);
-
-			_environmentEffects.generateBrdf(brdfView, size);
-
-			imageLayoutTransition(brdf.image, format, 1, 1, vk::ImageLayout::eGeneral,
-					vk::ImageLayout::eShaderReadOnlyOptimal);
-		}
-
-		vk::Format format = vk::Format::eR32G32B32A32Sfloat;
-
-		Image *pImage = ImageLoader::loadHDRFromFile("sky.hdr");
-
-		uint32_t width = pImage->getWidth();
-		uint32_t height = pImage->getHeight();
-
-		std::vector<uint8_t> data = pImage->getData();
-
-		AllocatedImage sky = imageCreate(width, height, format, 1,
-				vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst);
-
-		imageLayoutTransition(sky.image, format, 1, 1, vk::ImageLayout::eUndefined,
-				vk::ImageLayout::eTransferDstOptimal);
-
-		imageSend(sky.image, width, height, data.data(), data.size());
-
-		imageLayoutTransition(sky.image, format, 1, 1, vk::ImageLayout::eTransferDstOptimal,
-				vk::ImageLayout::eTransferSrcOptimal);
-
-		uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(height))) + 1;
-
-		AllocatedImage skyCube = imageCopyToCube(sky.image, width, height, format);
-
-		imageLayoutTransition(skyCube.image, format, mipLevels, 6, vk::ImageLayout::eGeneral,
-				vk::ImageLayout::eTransferDstOptimal);
-
-		_generateMipmaps(skyCube.image, height, height, format, mipLevels, 6);
-
-		vk::ImageView skyCubeView =
-				imageViewCreate(skyCube.image, format, mipLevels, 6, vk::ImageViewType::eCube);
-
-		vk::Sampler skyCubeSampler = samplerCreate(vk::Filter::eLinear, mipLevels);
-
-		AllocatedImage irradiance = _environmentEffects.filterIrradiance(skyCubeView);
-		AllocatedImage specular =
-				_environmentEffects.filterSpecular(skyCubeView, height, mipLevels);
-
-		vk::ImageView irradianceView =
-				imageViewCreate(irradiance.image, format, 1, 6, vk::ImageViewType::eCube);
-
-		vk::Sampler irradianceSampler = samplerCreate(vk::Filter::eLinear, 1);
-
-		vk::ImageView specularView =
-				imageViewCreate(specular.image, format, 5, 6, vk::ImageViewType::eCube);
-
-		vk::Sampler specularSampler = samplerCreate(vk::Filter::eLinear, 5);
-
-		{
-			vk::DescriptorImageInfo imageInfo;
-			imageInfo.setImageView(skyCubeView);
-			imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-			imageInfo.setSampler(skyCubeSampler);
-
-			vk::WriteDescriptorSet writeInfo;
-			writeInfo.setDstSet(_skySet);
-			writeInfo.setDstBinding(0);
-			writeInfo.setDstArrayElement(0);
-			writeInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-			writeInfo.setDescriptorCount(1);
-			writeInfo.setImageInfo(imageInfo);
-
-			device.updateDescriptorSets(writeInfo, nullptr);
-		}
-
-		{
-			vk::DescriptorImageInfo irradianceImageInfo;
-			irradianceImageInfo.setImageView(irradianceView);
-			irradianceImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-			irradianceImageInfo.setSampler(irradianceSampler);
-
-			vk::DescriptorImageInfo specularImageInfo;
-			specularImageInfo.setImageView(specularView);
-			specularImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-			specularImageInfo.setSampler(specularSampler);
-
-			vk::DescriptorImageInfo brdfLUTImageInfo;
-			brdfLUTImageInfo.setImageView(brdfView);
-			brdfLUTImageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-			brdfLUTImageInfo.setSampler(brdfSampler);
-
-			vk::WriteDescriptorSet irradianceWriteInfo;
-			irradianceWriteInfo.setDstSet(_iblSet);
-			irradianceWriteInfo.setDstBinding(0);
-			irradianceWriteInfo.setDstArrayElement(0);
-			irradianceWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-			irradianceWriteInfo.setDescriptorCount(1);
-			irradianceWriteInfo.setImageInfo(irradianceImageInfo);
-
-			vk::WriteDescriptorSet specularWriteInfo;
-			specularWriteInfo.setDstSet(_iblSet);
-			specularWriteInfo.setDstBinding(1);
-			specularWriteInfo.setDstArrayElement(0);
-			specularWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-			specularWriteInfo.setDescriptorCount(1);
-			specularWriteInfo.setImageInfo(specularImageInfo);
-
-			vk::WriteDescriptorSet brdfLUTWriteInfo;
-			brdfLUTWriteInfo.setDstSet(_iblSet);
-			brdfLUTWriteInfo.setDstBinding(2);
-			brdfLUTWriteInfo.setDstArrayElement(0);
-			brdfLUTWriteInfo.setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-			brdfLUTWriteInfo.setDescriptorCount(1);
-			brdfLUTWriteInfo.setImageInfo(brdfLUTImageInfo);
-
-			std::array<vk::WriteDescriptorSet, 3> writeInfos = {
-				irradianceWriteInfo,
-				specularWriteInfo,
-				brdfLUTWriteInfo,
-			};
-
-			device.updateDescriptorSets(writeInfos, nullptr);
-		}
+		environmentSkyUpdate(image);
 	}
 }
 

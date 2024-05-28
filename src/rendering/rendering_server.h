@@ -88,6 +88,8 @@ public:
 	void setExposure(float exposure);
 	void setWhite(float white);
 
+	void environmentSkyUpdate(const std::shared_ptr<Image> image);
+
 	void draw();
 
 	vk::Instance getVkInstance() const;

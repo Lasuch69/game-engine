@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <vulkan/vulkan.hpp>
 
-#include "../types/allocated.h"
 #include "../types/attachment.h"
 
 class RenderTarget {
@@ -32,11 +31,8 @@ public:
 
 class EnvironmentEffects {
 private:
-	vk::PipelineLayout _cubemapPipelineLayout;
-	vk::Pipeline _cubemapPipeline;
-
-	vk::DescriptorSetLayout _cubemapSetLayout;
-	vk::DescriptorSet _cubemapSet;
+	vk::Device _device;
+	vk::PhysicalDeviceMemoryProperties _memProperties;
 
 	vk::PipelineLayout _brdfPipelineLayout;
 	vk::Pipeline _brdfPipeline;
@@ -44,39 +40,49 @@ private:
 	vk::DescriptorSetLayout _brdfSetLayout;
 	vk::DescriptorSet _brdfSet;
 
-	vk::PipelineLayout _irradianceFilterPipelineLayout;
-	vk::Pipeline _irradianceFilterPipeline;
+	vk::PipelineLayout _cubemapPipelineLayout;
+	vk::Pipeline _cubemapPipeline;
+
+	vk::DescriptorSetLayout _cubemapSetLayout;
+	vk::DescriptorSet _cubemapSet;
+
+	vk::PipelineLayout _irradiancePipelineLayout;
+	vk::Pipeline _irradiancePipeline;
 
 	struct SpecularFilterConstants {
-		uint32_t srcCubeSize;
+		uint32_t size;
 		float roughness;
 	};
 
-	vk::PipelineLayout _specularFilterPipelineLayout;
-	vk::Pipeline _specularFilterPipeline;
+	vk::PipelineLayout _specularPipelineLayout;
+	vk::Pipeline _specularPipeline;
 
 	vk::DescriptorSetLayout _filterSetLayout;
 	vk::DescriptorSet _filterSet;
 
 	bool _initialized = false;
 
-	void _createDescriptors(vk::Device device, vk::DescriptorPool descriptorPool);
-	void _createPipelines(vk::Device device, vk::PhysicalDeviceMemoryProperties memProperties);
+	void _createDescriptors(vk::DescriptorPool descriptorPool);
+	void _createPipelines();
 
-	void _updateCubemapSet(vk::Device device, vk::ImageView imageView, vk::ImageView cubeView);
-	void _updateBrdfSet(vk::Device device, vk::ImageView imageView);
-	void _updateFilterSet(vk::Device device, vk::ImageView view, vk::Sampler sampler);
+	void _updateBrdfSet(vk::ImageView dstImageView);
+	void _updateCubemapSet(vk::ImageView srcImageView, vk::ImageView dstCubemapView);
+	void _updateFilterSet(vk::ImageView srcImageView, vk::Sampler sampler);
 
-	void _filterIrradiance(vk::CommandBuffer commandBuffer, RenderTarget renderTarget);
-	void _filterSpecularStep(vk::CommandBuffer commandBuffer, RenderTarget renderTarget,
-			uint32_t srcCubeSize, float roughness);
+	void _drawIrradianceFilter(vk::CommandBuffer commandBuffer, RenderTarget renderTarget);
+	void _drawSpecularFilter(vk::CommandBuffer commandBuffer, RenderTarget renderTarget,
+			uint32_t size, float roughness);
+
+	void _copyImageToLevel(vk::Image srcImage, vk::Image dstImage, uint32_t level, uint32_t size);
 
 public:
-	void imageCopyToCube(vk::ImageView image, vk::ImageView cube, uint32_t cubeSize);
-	void generateBrdf(vk::ImageView image, uint32_t size);
+	void generateBrdf(vk::ImageView dstImageView, uint32_t size);
+	void imageCopyToCube(vk::ImageView srcImageView, vk::ImageView dstCubemapView, uint32_t size);
 
-	AllocatedImage filterIrradiance(vk::ImageView cubeView);
-	AllocatedImage filterSpecular(vk::ImageView cubeView, uint32_t srcCubeSize, uint32_t mipLevels);
+	void filterIrradiance(
+			vk::ImageView srcCubemapView, vk::Image dstCubemap, vk::Format format, uint32_t size);
+	void filterSpecular(vk::ImageView srcCubemapView, uint32_t srcSize, uint32_t srcMipLevels,
+			vk::Format format, vk::Image dstCubemap, uint32_t dstSize, uint32_t dstMipLevels);
 
 	void init();
 	~EnvironmentEffects();

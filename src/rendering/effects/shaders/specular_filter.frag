@@ -6,7 +6,7 @@
 #include "include/filter_incl.glsl"
 
 layout(push_constant) uniform PreFilterPushConstants {
-	uint srcCubeSize;
+	uint size;
 	float roughness;
 };
 
@@ -51,7 +51,7 @@ void main() {
 			float HdotV = max(dot(H, V), 0.0);
 			float pdf = D * NdotH / (4.0 * HdotV) + 0.0001;
 
-			float saTexel = 4.0 * PI / (6.0 * float(srcCubeSize) * float(srcCubeSize));
+			float saTexel = 4.0 * PI / (6.0 * float(size) * float(size));
 			float saSample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
 
 			float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);

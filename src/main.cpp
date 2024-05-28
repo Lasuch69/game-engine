@@ -21,6 +21,7 @@
 #include <version.h>
 
 #include "camera_controller.h"
+#include "image_loader.h"
 #include "scene.h"
 #include "time.h"
 
@@ -120,6 +121,20 @@ int main(int argc, char *argv[]) {
 				char *pFile = event.drop.file;
 				std::filesystem::path path(pFile);
 				SDL_free(pFile);
+
+				const char *pExtension = path.extension().c_str();
+
+				if (strcmp(pExtension, ".hdr") == 0) {
+					std::shared_ptr<Image> image(ImageLoader::loadHDRFromFile(path));
+					RS::getSingleton().environmentSkyUpdate(image);
+					break;
+				}
+
+				if (strcmp(pExtension, ".exr") == 0) {
+					std::shared_ptr<Image> image(ImageLoader::loadEXRFromFile(path));
+					RS::getSingleton().environmentSkyUpdate(image);
+					break;
+				}
 
 				pScene->clear();
 				pScene->load(path);

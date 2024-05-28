@@ -101,8 +101,31 @@ private:
 	float _exposure = 1.25f;
 	float _white = 8.0f;
 
+	AllocatedImage _brdfLut;
+	vk::ImageView _brdfView;
+	vk::Sampler _brdfSampler;
+
+	typedef struct {
+		AllocatedImage cubemap;
+		vk::ImageView cubemapView;
+		vk::Sampler cubemapSampler;
+
+		AllocatedImage irradiance;
+		vk::ImageView irradianceView;
+		vk::Sampler irradianceSampler;
+
+		AllocatedImage specular;
+		vk::ImageView specularView;
+		vk::Sampler specularSampler;
+	} EnvironmentData;
+
+	EnvironmentData _environmentData;
+
 	void _generateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Format format,
 			uint32_t mipLevels, uint32_t arrayLayers = 1);
+
+	AllocatedImage _filterIrradiance(vk::ImageView srcCubemapView);
+	AllocatedImage _filterSpecular(vk::ImageView srcCubemapView, uint32_t size, uint32_t mipLevels);
 
 public:
 	RenderingDevice(RenderingDevice const &) = delete;
@@ -114,7 +137,8 @@ public:
 	AllocatedBuffer bufferCreate(
 			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
 	void bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
-	void bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height);
+	void bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height,
+			vk::ImageLayout layout = vk::ImageLayout::eTransferDstOptimal);
 	void bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size);
 	void bufferDestroy(AllocatedBuffer buffer);
 
@@ -124,9 +148,8 @@ public:
 			uint32_t size, vk::Format format, uint32_t mipLevels, vk::ImageUsageFlags usage);
 	void imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
 			uint32_t arrayLayers, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-	void imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size);
-	AllocatedImage imageCopyToCube(
-			vk::Image image, uint32_t width, uint32_t height, vk::Format format);
+	void imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size,
+			vk::ImageLayout layout);
 	void imageDestroy(AllocatedImage image);
 
 	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels,
@@ -138,6 +161,8 @@ public:
 
 	TextureRD textureCreate(const std::shared_ptr<Image> image);
 	void textureDestroy(TextureRD texture);
+
+	void environmentSkyUpdate(const std::shared_ptr<Image> image);
 
 	void updateUniformBuffer(const glm::vec3 &viewPosition);
 

@@ -245,6 +245,10 @@ void RS::setWhite(float white) {
 	RD::getSingleton().setWhite(white);
 }
 
+void RS::environmentSkyUpdate(const std::shared_ptr<Image> image) {
+	RD::getSingleton().environmentSkyUpdate(image);
+}
+
 void RenderingServer::draw() {
 	RD &rd = RD::getSingleton();
 	rd.updateUniformBuffer(_camera.transform[3]);

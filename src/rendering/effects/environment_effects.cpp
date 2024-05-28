@@ -226,7 +226,37 @@ RenderTarget::RenderTarget(
 	_size = size;
 }
 
-void EnvironmentEffects::_createDescriptors(vk::Device device, vk::DescriptorPool descriptorPool) {
+void EnvironmentEffects::_createDescriptors(vk::DescriptorPool descriptorPool) {
+	// brdf
+
+	{
+		vk::DescriptorSetLayoutBinding binding = {};
+		binding.setBinding(0);
+		binding.setDescriptorType(vk::DescriptorType::eStorageImage);
+		binding.setDescriptorCount(1);
+		binding.setStageFlags(vk::ShaderStageFlagBits::eCompute);
+
+		vk::DescriptorSetLayoutCreateInfo createInfo = {};
+		createInfo.setBindings(binding);
+
+		vk::Result err = _device.createDescriptorSetLayout(&createInfo, nullptr, &_brdfSetLayout);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Failed to create BRDF set layout!");
+
+		vk::DescriptorSetAllocateInfo allocInfo = {};
+		allocInfo.setDescriptorPool(descriptorPool);
+		allocInfo.setDescriptorSetCount(1);
+		allocInfo.setSetLayouts(_brdfSetLayout);
+
+		err = _device.allocateDescriptorSets(&allocInfo, &_brdfSet);
+
+		if (err != vk::Result::eSuccess)
+			throw std::runtime_error("Failed to allocate BRDF set!");
+	}
+
+	// cubemap
+
 	{
 		std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {};
 		bindings[0].setBinding(0);
@@ -242,7 +272,8 @@ void EnvironmentEffects::_createDescriptors(vk::Device device, vk::DescriptorPoo
 		vk::DescriptorSetLayoutCreateInfo createInfo = {};
 		createInfo.setBindings(bindings);
 
-		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_cubemapSetLayout);
+		vk::Result err =
+				_device.createDescriptorSetLayout(&createInfo, nullptr, &_cubemapSetLayout);
 
 		if (err != vk::Result::eSuccess)
 			throw std::runtime_error("Failed to create cubemap set layout!");
@@ -252,37 +283,13 @@ void EnvironmentEffects::_createDescriptors(vk::Device device, vk::DescriptorPoo
 		allocInfo.setDescriptorSetCount(1);
 		allocInfo.setSetLayouts(_cubemapSetLayout);
 
-		err = device.allocateDescriptorSets(&allocInfo, &_cubemapSet);
+		err = _device.allocateDescriptorSets(&allocInfo, &_cubemapSet);
 
 		if (err != vk::Result::eSuccess)
 			throw std::runtime_error("Failed to allocate cubemap set!");
 	}
 
-	{
-		vk::DescriptorSetLayoutBinding binding = {};
-		binding.setBinding(0);
-		binding.setDescriptorType(vk::DescriptorType::eStorageImage);
-		binding.setDescriptorCount(1);
-		binding.setStageFlags(vk::ShaderStageFlagBits::eCompute);
-
-		vk::DescriptorSetLayoutCreateInfo createInfo = {};
-		createInfo.setBindings(binding);
-
-		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_brdfSetLayout);
-
-		if (err != vk::Result::eSuccess)
-			throw std::runtime_error("Failed to create BRDF set layout!");
-
-		vk::DescriptorSetAllocateInfo allocInfo = {};
-		allocInfo.setDescriptorPool(descriptorPool);
-		allocInfo.setDescriptorSetCount(1);
-		allocInfo.setSetLayouts(_brdfSetLayout);
-
-		err = device.allocateDescriptorSets(&allocInfo, &_brdfSet);
-
-		if (err != vk::Result::eSuccess)
-			throw std::runtime_error("Failed to allocate BRDF set!");
-	}
+	// filter
 
 	{
 		vk::DescriptorSetLayoutBinding binding = {};
@@ -294,7 +301,7 @@ void EnvironmentEffects::_createDescriptors(vk::Device device, vk::DescriptorPoo
 		vk::DescriptorSetLayoutCreateInfo createInfo = {};
 		createInfo.setBindings(binding);
 
-		vk::Result err = device.createDescriptorSetLayout(&createInfo, nullptr, &_filterSetLayout);
+		vk::Result err = _device.createDescriptorSetLayout(&createInfo, nullptr, &_filterSetLayout);
 
 		if (err != vk::Result::eSuccess)
 			throw std::runtime_error("Failed to create filter set layout!");
@@ -304,55 +311,24 @@ void EnvironmentEffects::_createDescriptors(vk::Device device, vk::DescriptorPoo
 		allocInfo.setDescriptorSetCount(1);
 		allocInfo.setSetLayouts(_filterSetLayout);
 
-		err = device.allocateDescriptorSets(&allocInfo, &_filterSet);
+		err = _device.allocateDescriptorSets(&allocInfo, &_filterSet);
 
 		if (err != vk::Result::eSuccess)
 			throw std::runtime_error("Failed to allocate filter set!");
 	}
 }
 
-void EnvironmentEffects::_createPipelines(
-		vk::Device device, vk::PhysicalDeviceMemoryProperties memProperties) {
-	{
-		vk::PipelineLayoutCreateInfo layoutCreateInfo = {};
-		layoutCreateInfo.setSetLayouts(_cubemapSetLayout);
-
-		_cubemapPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
-
-		CubemapShader shader;
-
-		uint32_t codeSize = sizeof(shader.computeCode);
-		vk::ShaderModule computeModule = createModule(device, shader.computeCode, codeSize);
-
-		vk::PipelineShaderStageCreateInfo computeStageInfo = {};
-		computeStageInfo.setModule(computeModule);
-		computeStageInfo.setStage(vk::ShaderStageFlagBits::eCompute);
-		computeStageInfo.setPName("main");
-
-		vk::ComputePipelineCreateInfo createInfo = {};
-		createInfo.setStage(computeStageInfo);
-		createInfo.setLayout(_cubemapPipelineLayout);
-
-		vk::ResultValue<vk::Pipeline> result = device.createComputePipeline({}, createInfo);
-
-		if (result.result != vk::Result::eSuccess)
-			throw std::runtime_error("Failed to create cubemap compute pipeline!");
-
-		_cubemapPipeline = result.value;
-
-		device.destroyShaderModule(computeModule);
-	}
-
+void EnvironmentEffects::_createPipelines() {
 	{
 		vk::PipelineLayoutCreateInfo layoutCreateInfo = {};
 		layoutCreateInfo.setSetLayouts(_brdfSetLayout);
 
-		_brdfPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
+		_brdfPipelineLayout = _device.createPipelineLayout(layoutCreateInfo);
 
 		BrdfShader shader;
 
 		uint32_t codeSize = sizeof(shader.computeCode);
-		vk::ShaderModule computeModule = createModule(device, shader.computeCode, codeSize);
+		vk::ShaderModule computeModule = createModule(_device, shader.computeCode, codeSize);
 
 		vk::PipelineShaderStageCreateInfo computeStageInfo = {};
 		computeStageInfo.setModule(computeModule);
@@ -363,37 +339,67 @@ void EnvironmentEffects::_createPipelines(
 		createInfo.setStage(computeStageInfo);
 		createInfo.setLayout(_brdfPipelineLayout);
 
-		vk::ResultValue<vk::Pipeline> result = device.createComputePipeline({}, createInfo);
+		vk::ResultValue<vk::Pipeline> result = _device.createComputePipeline({}, createInfo);
 
 		if (result.result != vk::Result::eSuccess)
 			throw std::runtime_error("Failed to create BRDF compute pipeline!");
 
 		_brdfPipeline = result.value;
 
-		device.destroyShaderModule(computeModule);
+		_device.destroyShaderModule(computeModule);
 	}
 
-	RenderTarget rt = RenderTarget::create(device, 1, memProperties);
+	{
+		vk::PipelineLayoutCreateInfo layoutCreateInfo = {};
+		layoutCreateInfo.setSetLayouts(_cubemapSetLayout);
+
+		_cubemapPipelineLayout = _device.createPipelineLayout(layoutCreateInfo);
+
+		CubemapShader shader;
+
+		uint32_t codeSize = sizeof(shader.computeCode);
+		vk::ShaderModule computeModule = createModule(_device, shader.computeCode, codeSize);
+
+		vk::PipelineShaderStageCreateInfo computeStageInfo = {};
+		computeStageInfo.setModule(computeModule);
+		computeStageInfo.setStage(vk::ShaderStageFlagBits::eCompute);
+		computeStageInfo.setPName("main");
+
+		vk::ComputePipelineCreateInfo createInfo = {};
+		createInfo.setStage(computeStageInfo);
+		createInfo.setLayout(_cubemapPipelineLayout);
+
+		vk::ResultValue<vk::Pipeline> result = _device.createComputePipeline({}, createInfo);
+
+		if (result.result != vk::Result::eSuccess)
+			throw std::runtime_error("Failed to create cubemap compute pipeline!");
+
+		_cubemapPipeline = result.value;
+
+		_device.destroyShaderModule(computeModule);
+	}
+
+	RenderTarget rt = RenderTarget::create(_device, 1, _memProperties);
 
 	{
 		vk::PipelineLayoutCreateInfo layoutCreateInfo = {};
 		layoutCreateInfo.setSetLayouts(_filterSetLayout);
 
-		_irradianceFilterPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
+		_irradiancePipelineLayout = _device.createPipelineLayout(layoutCreateInfo);
 
 		IrradianceFilterShader shader;
 
 		uint32_t codeSize = sizeof(shader.vertexCode);
-		vk::ShaderModule vertexStage = createModule(device, shader.vertexCode, codeSize);
+		vk::ShaderModule vertexStage = createModule(_device, shader.vertexCode, codeSize);
 
 		codeSize = sizeof(shader.fragmentCode);
-		vk::ShaderModule fragmentStage = createModule(device, shader.fragmentCode, codeSize);
+		vk::ShaderModule fragmentStage = createModule(_device, shader.fragmentCode, codeSize);
 
-		_irradianceFilterPipeline = createPipeline(device, vertexStage, fragmentStage,
-				_irradianceFilterPipelineLayout, rt.getRenderPass());
+		_irradiancePipeline = createPipeline(
+				_device, vertexStage, fragmentStage, _irradiancePipelineLayout, rt.getRenderPass());
 
-		device.destroyShaderModule(vertexStage);
-		device.destroyShaderModule(fragmentStage);
+		_device.destroyShaderModule(vertexStage);
+		_device.destroyShaderModule(fragmentStage);
 	}
 
 	{
@@ -406,34 +412,49 @@ void EnvironmentEffects::_createPipelines(
 		layoutCreateInfo.setPushConstantRanges(pushConstants);
 		layoutCreateInfo.setSetLayouts(_filterSetLayout);
 
-		_specularFilterPipelineLayout = device.createPipelineLayout(layoutCreateInfo);
+		_specularPipelineLayout = _device.createPipelineLayout(layoutCreateInfo);
 
 		SpecularFilterShader shader;
 
 		uint32_t codeSize = sizeof(shader.vertexCode);
-		vk::ShaderModule vertexStage = createModule(device, shader.vertexCode, codeSize);
+		vk::ShaderModule vertexStage = createModule(_device, shader.vertexCode, codeSize);
 
 		codeSize = sizeof(shader.fragmentCode);
-		vk::ShaderModule fragmentStage = createModule(device, shader.fragmentCode, codeSize);
+		vk::ShaderModule fragmentStage = createModule(_device, shader.fragmentCode, codeSize);
 
-		_specularFilterPipeline = createPipeline(device, vertexStage, fragmentStage,
-				_specularFilterPipelineLayout, rt.getRenderPass());
+		_specularPipeline = createPipeline(
+				_device, vertexStage, fragmentStage, _specularPipelineLayout, rt.getRenderPass());
 
-		device.destroyShaderModule(vertexStage);
-		device.destroyShaderModule(fragmentStage);
+		_device.destroyShaderModule(vertexStage);
+		_device.destroyShaderModule(fragmentStage);
 	}
 
-	rt.destroy(device);
+	rt.destroy(_device);
+}
+
+void EnvironmentEffects::_updateBrdfSet(vk::ImageView dstImageView) {
+	vk::DescriptorImageInfo imageInfo = {};
+	imageInfo.setImageView(dstImageView);
+	imageInfo.setImageLayout(vk::ImageLayout::eGeneral);
+
+	vk::WriteDescriptorSet writeInfo = {};
+	writeInfo.setDstSet(_brdfSet);
+	writeInfo.setDstBinding(0);
+	writeInfo.setDescriptorType(vk::DescriptorType::eStorageImage);
+	writeInfo.setDescriptorCount(1);
+	writeInfo.setImageInfo(imageInfo);
+
+	_device.updateDescriptorSets(writeInfo, nullptr);
 }
 
 void EnvironmentEffects::_updateCubemapSet(
-		vk::Device device, vk::ImageView imageView, vk::ImageView cubeView) {
+		vk::ImageView srcImageView, vk::ImageView dstCubemapView) {
 	std::array<vk::DescriptorImageInfo, 2> imageInfos = {};
 
-	imageInfos[0].setImageView(imageView);
+	imageInfos[0].setImageView(srcImageView);
 	imageInfos[0].setImageLayout(vk::ImageLayout::eGeneral);
 
-	imageInfos[1].setImageView(cubeView);
+	imageInfos[1].setImageView(dstCubemapView);
 	imageInfos[1].setImageLayout(vk::ImageLayout::eGeneral);
 
 	std::array<vk::WriteDescriptorSet, 2> writeInfos = {};
@@ -450,28 +471,12 @@ void EnvironmentEffects::_updateCubemapSet(
 	writeInfos[1].setDescriptorCount(1);
 	writeInfos[1].setImageInfo(imageInfos[1]);
 
-	device.updateDescriptorSets(writeInfos, nullptr);
+	_device.updateDescriptorSets(writeInfos, nullptr);
 }
 
-void EnvironmentEffects::_updateBrdfSet(vk::Device device, vk::ImageView imageView) {
+void EnvironmentEffects::_updateFilterSet(vk::ImageView srcImageView, vk::Sampler sampler) {
 	vk::DescriptorImageInfo imageInfo = {};
-	imageInfo.setImageView(imageView);
-	imageInfo.setImageLayout(vk::ImageLayout::eGeneral);
-
-	vk::WriteDescriptorSet writeInfo = {};
-	writeInfo.setDstSet(_brdfSet);
-	writeInfo.setDstBinding(0);
-	writeInfo.setDescriptorType(vk::DescriptorType::eStorageImage);
-	writeInfo.setDescriptorCount(1);
-	writeInfo.setImageInfo(imageInfo);
-
-	device.updateDescriptorSets(writeInfo, nullptr);
-}
-
-void EnvironmentEffects::_updateFilterSet(
-		vk::Device device, vk::ImageView view, vk::Sampler sampler) {
-	vk::DescriptorImageInfo imageInfo = {};
-	imageInfo.setImageView(view);
+	imageInfo.setImageView(srcImageView);
 	imageInfo.setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
 	imageInfo.setSampler(sampler);
 
@@ -482,10 +487,10 @@ void EnvironmentEffects::_updateFilterSet(
 	writeInfo.setDescriptorCount(1);
 	writeInfo.setImageInfo(imageInfo);
 
-	device.updateDescriptorSets(writeInfo, nullptr);
+	_device.updateDescriptorSets(writeInfo, nullptr);
 }
 
-void EnvironmentEffects::_filterIrradiance(
+void EnvironmentEffects::_drawIrradianceFilter(
 		vk::CommandBuffer commandBuffer, RenderTarget renderTarget) {
 	vk::Viewport viewport = {};
 	viewport.setX(0.0f);
@@ -517,17 +522,16 @@ void EnvironmentEffects::_filterIrradiance(
 	commandBuffer.setScissor(0, scissor);
 
 	vk::PipelineBindPoint bindPoint = vk::PipelineBindPoint::eGraphics;
-	commandBuffer.bindPipeline(bindPoint, _irradianceFilterPipeline);
-	commandBuffer.bindDescriptorSets(
-			bindPoint, _irradianceFilterPipelineLayout, 0, _filterSet, nullptr);
+	commandBuffer.bindPipeline(bindPoint, _irradiancePipeline);
+	commandBuffer.bindDescriptorSets(bindPoint, _irradiancePipelineLayout, 0, _filterSet, nullptr);
 
 	commandBuffer.draw(3, 1, 0, 0);
 
 	commandBuffer.endRenderPass();
 }
 
-void EnvironmentEffects::_filterSpecularStep(vk::CommandBuffer commandBuffer,
-		RenderTarget renderTarget, uint32_t srcCubeSize, float roughness) {
+void EnvironmentEffects::_drawSpecularFilter(vk::CommandBuffer commandBuffer,
+		RenderTarget renderTarget, uint32_t size, float roughness) {
 	vk::Viewport viewport = {};
 	viewport.setX(0.0f);
 	viewport.setY(0.0f);
@@ -558,46 +562,56 @@ void EnvironmentEffects::_filterSpecularStep(vk::CommandBuffer commandBuffer,
 	commandBuffer.setScissor(0, scissor);
 
 	vk::PipelineBindPoint bindPoint = vk::PipelineBindPoint::eGraphics;
-	commandBuffer.bindPipeline(bindPoint, _specularFilterPipeline);
-	commandBuffer.bindDescriptorSets(
-			bindPoint, _specularFilterPipelineLayout, 0, _filterSet, nullptr);
+	commandBuffer.bindPipeline(bindPoint, _specularPipeline);
+	commandBuffer.bindDescriptorSets(bindPoint, _specularPipelineLayout, 0, _filterSet, nullptr);
 
 	SpecularFilterConstants constants = {};
-	constants.srcCubeSize = srcCubeSize;
+	constants.size = size;
 	constants.roughness = roughness;
 
-	commandBuffer.pushConstants(_specularFilterPipelineLayout, vk::ShaderStageFlagBits::eFragment,
-			0, sizeof(constants), &constants);
+	commandBuffer.pushConstants(_specularPipelineLayout, vk::ShaderStageFlagBits::eFragment, 0,
+			sizeof(constants), &constants);
 
 	commandBuffer.draw(3, 1, 0, 0);
 
 	commandBuffer.endRenderPass();
 }
 
-void EnvironmentEffects::imageCopyToCube(
-		vk::ImageView image, vk::ImageView cube, uint32_t cubeSize) {
-	RD &rd = RD::getSingleton();
-	vk::Device device = rd.getDevice();
+void EnvironmentEffects::_copyImageToLevel(
+		vk::Image srcImage, vk::Image dstImage, uint32_t level, uint32_t size) {
+	vk::ImageSubresourceLayers srcSubresource = {};
+	srcSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	srcSubresource.setMipLevel(0);
+	srcSubresource.setBaseArrayLayer(0);
+	srcSubresource.setLayerCount(6);
 
-	_updateCubemapSet(device, image, cube);
+	vk::ImageSubresourceLayers dstSubresource = {};
+	dstSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
+	dstSubresource.setMipLevel(level);
+	dstSubresource.setBaseArrayLayer(0);
+	dstSubresource.setLayerCount(6);
 
-	vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
+	vk::Extent3D extent(size, size, 1);
 
-	uint32_t groupCount = (cubeSize + 15) / 16;
-	vk::PipelineBindPoint bindPoint = vk::PipelineBindPoint::eCompute;
+	vk::ImageCopy copyInfo = {};
+	copyInfo.setSrcSubresource(srcSubresource);
+	copyInfo.setDstSubresource(dstSubresource);
+	copyInfo.setExtent(extent);
 
-	commandBuffer.bindPipeline(bindPoint, _cubemapPipeline);
-	commandBuffer.bindDescriptorSets(bindPoint, _cubemapPipelineLayout, 0, _cubemapSet, nullptr);
-	commandBuffer.dispatch(groupCount, groupCount, 6);
+	{
+		vk::CommandBuffer commandBuffer = RD::getSingleton().beginSingleTimeCommands();
 
-	rd.endSingleTimeCommands(commandBuffer);
+		// clone framebuffer image level 0 to level i of filteredCube
+		commandBuffer.copyImage(srcImage, vk::ImageLayout::eTransferSrcOptimal, dstImage,
+				vk::ImageLayout::eTransferDstOptimal, copyInfo);
+
+		RD::getSingleton().endSingleTimeCommands(commandBuffer);
+	}
 }
 
-void EnvironmentEffects::generateBrdf(vk::ImageView image, uint32_t size) {
+void EnvironmentEffects::generateBrdf(vk::ImageView dstImageView, uint32_t size) {
 	RD &rd = RD::getSingleton();
-	vk::Device device = rd.getDevice();
-
-	_updateBrdfSet(device, image);
+	_updateBrdfSet(dstImageView);
 
 	vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
@@ -611,35 +625,37 @@ void EnvironmentEffects::generateBrdf(vk::ImageView image, uint32_t size) {
 	rd.endSingleTimeCommands(commandBuffer);
 }
 
-AllocatedImage EnvironmentEffects::filterIrradiance(vk::ImageView cubeView) {
+void EnvironmentEffects::imageCopyToCube(
+		vk::ImageView srcImageView, vk::ImageView dstCubemapView, uint32_t size) {
 	RD &rd = RD::getSingleton();
+	_updateCubemapSet(srcImageView, dstCubemapView);
 
-	vk::Device device = rd.getDevice();
-	vk::PhysicalDeviceMemoryProperties memProperties = rd.getPhysicalDevice().getMemoryProperties();
+	vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
-	vk::Sampler sampler = createSampler(device, 1);
-	_updateFilterSet(device, cubeView, sampler);
+	uint32_t groupCount = (size + 15) / 16;
+	vk::PipelineBindPoint bindPoint = vk::PipelineBindPoint::eCompute;
 
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
-	vk::ImageUsageFlags usage =
-			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
+	commandBuffer.bindPipeline(bindPoint, _cubemapPipeline);
+	commandBuffer.bindDescriptorSets(bindPoint, _cubemapPipelineLayout, 0, _cubemapSet, nullptr);
+	commandBuffer.dispatch(groupCount, groupCount, 6);
 
-	uint32_t size = 32;
+	rd.endSingleTimeCommands(commandBuffer);
+}
 
-	AllocatedImage filteredCube = rd.imageCubeCreate(size, format, 1, usage);
+void EnvironmentEffects::filterIrradiance(
+		vk::ImageView srcCubemapView, vk::Image dstCubemap, vk::Format format, uint32_t size) {
+	assert(format == vk::Format::eR32G32B32A32Sfloat);
 
-	// make filtered cube valid destination
-	rd.imageLayoutTransition(filteredCube.image, format, 1, 6, vk::ImageLayout::eUndefined,
-			vk::ImageLayout::eTransferDstOptimal);
+	vk::Sampler sampler = createSampler(_device, 1);
+	_updateFilterSet(srcCubemapView, sampler);
 
-	RenderTarget rt = RenderTarget::create(device, size, memProperties);
+	RenderTarget rt = RenderTarget::create(_device, size, _memProperties);
+
+	RD &rd = RD::getSingleton();
 
 	{
 		vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
-
-		// draw to render target
-		_filterIrradiance(commandBuffer, rt);
-
+		_drawIrradianceFilter(commandBuffer, rt);
 		rd.endSingleTimeCommands(commandBuffer);
 	}
 
@@ -663,122 +679,65 @@ AllocatedImage EnvironmentEffects::filterIrradiance(vk::ImageView cubeView) {
 	{
 		vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
-		// clone framebuffer image level 0 to level i of filteredCube
-		commandBuffer.copyImage(framebufferImage, vk::ImageLayout::eTransferSrcOptimal,
-				filteredCube.image, vk::ImageLayout::eTransferDstOptimal, copyInfo);
+		commandBuffer.copyImage(framebufferImage, vk::ImageLayout::eTransferSrcOptimal, dstCubemap,
+				vk::ImageLayout::eTransferDstOptimal, copyInfo);
 
 		rd.endSingleTimeCommands(commandBuffer);
 	}
 
 	// render target is no longer needed
-	rt.destroy(device);
-
-	device.destroySampler(sampler);
-
-	// make filtered cube ready for shader read
-	rd.imageLayoutTransition(filteredCube.image, format, 1, 6, vk::ImageLayout::eTransferDstOptimal,
-			vk::ImageLayout::eShaderReadOnlyOptimal);
-
-	return filteredCube;
+	rt.destroy(_device);
+	_device.destroySampler(sampler);
 }
 
-AllocatedImage EnvironmentEffects::filterSpecular(
-		vk::ImageView cubeView, uint32_t srcCubeSize, uint32_t mipLevels) {
+void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t srcSize,
+		uint32_t srcMipLevels, vk::Format format, vk::Image dstCubemap, uint32_t dstSize,
+		uint32_t dstMipLevels) {
+	assert(format == vk::Format::eR32G32B32A32Sfloat);
+
+	vk::Sampler sampler = createSampler(_device, srcMipLevels);
+	_updateFilterSet(srcCubemapView, sampler);
+
+	uint32_t levelSize = dstSize;
+
 	RD &rd = RD::getSingleton();
 
-	vk::Device device = rd.getDevice();
-	vk::PhysicalDeviceMemoryProperties memProperties = rd.getPhysicalDevice().getMemoryProperties();
+	for (uint32_t level = 0; level < dstMipLevels; level++) {
+		float roughness = static_cast<float>(level) / static_cast<float>(dstMipLevels - 1);
 
-	vk::Sampler sampler = createSampler(device, mipLevels);
-	_updateFilterSet(device, cubeView, sampler);
-
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
-	vk::ImageUsageFlags usage =
-			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-
-	const uint32_t LEVEL_COUNT = 5;
-	const uint32_t MAX_SIZE = 128;
-
-	AllocatedImage filteredCube = rd.imageCubeCreate(MAX_SIZE, format, LEVEL_COUNT, usage);
-
-	// make filtered cube valid destination
-	rd.imageLayoutTransition(filteredCube.image, format, LEVEL_COUNT, 6,
-			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-
-	uint32_t levelSize = MAX_SIZE;
-
-	for (uint32_t i = 0; i < LEVEL_COUNT; i++) {
-		float roughness = static_cast<float>(i) / static_cast<float>(LEVEL_COUNT - 1);
-
-		RenderTarget rt = RenderTarget::create(device, levelSize, memProperties);
+		RenderTarget rt = RenderTarget::create(_device, levelSize, _memProperties);
 
 		{
 			vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
-
-			// draw to render target
-			_filterSpecularStep(commandBuffer, rt, srcCubeSize, roughness);
-
+			_drawSpecularFilter(commandBuffer, rt, srcSize, roughness);
 			rd.endSingleTimeCommands(commandBuffer);
 		}
 
 		vk::Image framebufferImage = rt.getColorAttachment().getImage();
 
-		// make framebuffer image valid source
 		rd.imageLayoutTransition(framebufferImage, format, 1, 6,
 				vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
 
-		vk::ImageSubresourceLayers srcSubresource = {};
-		srcSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
-		srcSubresource.setMipLevel(0);
-		srcSubresource.setBaseArrayLayer(0);
-		srcSubresource.setLayerCount(6);
-
-		vk::ImageSubresourceLayers dstSubresource = {};
-		dstSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
-		dstSubresource.setMipLevel(i);
-		dstSubresource.setBaseArrayLayer(0);
-		dstSubresource.setLayerCount(6);
-
-		vk::ImageCopy copyInfo = {};
-		copyInfo.setSrcSubresource(srcSubresource);
-		copyInfo.setDstSubresource(dstSubresource);
-		copyInfo.setExtent(vk::Extent3D(levelSize, levelSize, 1));
-
-		{
-			vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
-
-			// clone framebuffer image level 0 to level i of filteredCube
-			commandBuffer.copyImage(framebufferImage, vk::ImageLayout::eTransferSrcOptimal,
-					filteredCube.image, vk::ImageLayout::eTransferDstOptimal, copyInfo);
-
-			rd.endSingleTimeCommands(commandBuffer);
-		}
+		_copyImageToLevel(framebufferImage, dstCubemap, level, levelSize);
 
 		// render target is no longer needed
-		rt.destroy(device);
-
+		rt.destroy(_device);
 		levelSize = levelSize >> 1;
 	}
 
-	device.destroySampler(sampler);
-
-	// make filtered cube ready for shader read
-	rd.imageLayoutTransition(filteredCube.image, format, LEVEL_COUNT, 6,
-			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-	return filteredCube;
+	_device.destroySampler(sampler);
 }
 
 void EnvironmentEffects::init() {
 	RD &rd = RD::getSingleton();
 
-	vk::Device device = rd.getDevice();
+	_device = rd.getDevice();
+	_memProperties = rd.getPhysicalDevice().getMemoryProperties();
+
 	vk::DescriptorPool descriptorPool = rd.getDescriptorPool();
 
-	vk::PhysicalDeviceMemoryProperties memProperties = rd.getPhysicalDevice().getMemoryProperties();
-
-	_createDescriptors(device, descriptorPool);
-	_createPipelines(device, memProperties);
+	_createDescriptors(descriptorPool);
+	_createPipelines();
 
 	_initialized = true;
 }
@@ -787,10 +746,19 @@ EnvironmentEffects::~EnvironmentEffects() {
 	if (!_initialized)
 		return;
 
-	RD &rd = RD::getSingleton();
-	vk::Device device = rd.getDevice();
+	_device.destroyPipeline(_brdfPipeline);
+	_device.destroyPipelineLayout(_brdfPipelineLayout);
+	_device.destroyDescriptorSetLayout(_brdfSetLayout);
 
-	device.destroyPipeline(_cubemapPipeline);
-	device.destroyPipelineLayout(_cubemapPipelineLayout);
-	device.destroyDescriptorSetLayout(_cubemapSetLayout);
+	_device.destroyPipeline(_cubemapPipeline);
+	_device.destroyPipelineLayout(_cubemapPipelineLayout);
+	_device.destroyDescriptorSetLayout(_cubemapSetLayout);
+
+	_device.destroyPipeline(_irradiancePipeline);
+	_device.destroyPipelineLayout(_irradiancePipelineLayout);
+
+	_device.destroyPipeline(_specularPipeline);
+	_device.destroyPipelineLayout(_specularPipelineLayout);
+
+	_device.destroyDescriptorSetLayout(_filterSetLayout);
 }

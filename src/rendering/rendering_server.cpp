@@ -7,6 +7,9 @@
 
 #include "../image.h"
 
+#include "render_scene_forward.h"
+#include "storage/light_storage.h"
+
 #include "rendering_device.h"
 #include "rendering_server.h"
 
@@ -128,35 +131,34 @@ void RS::meshInstanceFree(ObjectID meshInstance) {
 }
 
 ObjectID RS::lightCreate(LightType type) {
-	return RD::getSingleton().getLightStorage().lightCreate(type);
+	return LS::getSingleton().lightCreate(type);
 }
 
 void RS::lightSetTransform(ObjectID light, const glm::mat4 &transform) {
-	RD::getSingleton().getLightStorage().lightSetTransform(light, transform);
+	LS::getSingleton().lightSetTransform(light, reinterpret_cast<const float *>(&transform));
 }
 
 void RS::lightSetRange(ObjectID light, float range) {
-	RD::getSingleton().getLightStorage().lightSetRange(light, range);
+	LS::getSingleton().lightSetRange(light, range);
 }
 
 void RS::lightSetColor(ObjectID light, const glm::vec3 &color) {
-	RD::getSingleton().getLightStorage().lightSetColor(light, color);
+	LS::getSingleton().lightSetColor(light, reinterpret_cast<const float *>(&color));
 }
 
 void RS::lightSetIntensity(ObjectID light, float intensity) {
-	RD::getSingleton().getLightStorage().lightSetIntensity(light, intensity);
+	LS::getSingleton().lightSetIntensity(light, intensity);
 }
 
 void RS::lightFree(ObjectID light) {
-	RD::getSingleton().getLightStorage().lightFree(light);
+	LS::getSingleton().lightFree(light);
 }
 
 ObjectID RS::textureCreate(const std::shared_ptr<Image> image) {
 	if (image == nullptr)
 		return NULL_HANDLE;
 
-	TextureRD _texture = RD::getSingleton().textureCreate(image);
-	return _textures.insert(_texture);
+	return _textures.insert({});
 }
 
 void RS::textureFree(ObjectID texture) {
@@ -164,108 +166,60 @@ void RS::textureFree(ObjectID texture) {
 }
 
 ObjectID RS::materialCreate(const MaterialInfo &info) {
-	TextureRD albedo = _textures.get_id_or_else(info.albedo, _albedoFallback);
-	TextureRD normal = _textures.get_id_or_else(info.normal, _normalFallback);
-	TextureRD metallic = _textures.get_id_or_else(info.metallic, _metallicFallback);
-	TextureRD roughness = _textures.get_id_or_else(info.roughness, _roughnessFallback);
-
-	RD &rd = RD::getSingleton();
-	vk::Device device = rd.getDevice();
-	vk::DescriptorPool descriptorPool = rd.getDescriptorPool();
-
-	std::array<vk::DescriptorImageInfo, 4> imageInfos = {};
-	imageInfos[0].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-	imageInfos[0].setImageView(albedo.imageView);
-	imageInfos[0].setSampler(albedo.sampler);
-
-	imageInfos[1].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-	imageInfos[1].setImageView(normal.imageView);
-	imageInfos[1].setSampler(normal.sampler);
-
-	imageInfos[2].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-	imageInfos[2].setImageView(metallic.imageView);
-	imageInfos[2].setSampler(metallic.sampler);
-
-	imageInfos[3].setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal);
-	imageInfos[3].setImageView(roughness.imageView);
-	imageInfos[3].setSampler(roughness.sampler);
-
-	vk::DescriptorSetLayout textureLayout = rd.getTextureLayout();
-
-	vk::DescriptorSetAllocateInfo allocInfo = {};
-	allocInfo.setDescriptorPool(descriptorPool);
-	allocInfo.setDescriptorSetCount(1);
-	allocInfo.setSetLayouts(textureLayout);
-
-	VkDescriptorSet textureSet = device.allocateDescriptorSets(allocInfo)[0];
-
-	std::array<vk::WriteDescriptorSet, 4> writeInfos = {};
-	writeInfos[0].setDstSet(textureSet);
-	writeInfos[0].setDstBinding(0);
-	writeInfos[0].setDstArrayElement(0);
-	writeInfos[0].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-	writeInfos[0].setDescriptorCount(1);
-	writeInfos[0].setImageInfo(imageInfos[0]);
-
-	writeInfos[1].setDstSet(textureSet);
-	writeInfos[1].setDstBinding(1);
-	writeInfos[1].setDstArrayElement(0);
-	writeInfos[1].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-	writeInfos[1].setDescriptorCount(1);
-	writeInfos[1].setImageInfo(imageInfos[1]);
-
-	writeInfos[2].setDstSet(textureSet);
-	writeInfos[2].setDstBinding(2);
-	writeInfos[2].setDstArrayElement(0);
-	writeInfos[2].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-	writeInfos[2].setDescriptorCount(1);
-	writeInfos[2].setImageInfo(imageInfos[2]);
-
-	writeInfos[3].setDstSet(textureSet);
-	writeInfos[3].setDstBinding(3);
-	writeInfos[3].setDstArrayElement(0);
-	writeInfos[3].setDescriptorType(vk::DescriptorType::eCombinedImageSampler);
-	writeInfos[3].setDescriptorCount(1);
-	writeInfos[3].setImageInfo(imageInfos[3]);
-
-	device.updateDescriptorSets(writeInfos, nullptr);
-
-	return _materials.insert({ textureSet });
+	return _materials.insert({});
 }
 
 void RS::materialFree(ObjectID material) {
 	_materials.free(material);
 }
 
-void RS::setExposure(float exposure) {
-	RD::getSingleton().setExposure(exposure);
-}
+void RS::setExposure(float exposure) {}
 
-void RS::setWhite(float white) {
-	RD::getSingleton().setWhite(white);
-}
+void RS::setWhite(float white) {}
 
-void RS::environmentSkyUpdate(const std::shared_ptr<Image> image) {
-	RD::getSingleton().environmentSkyUpdate(image);
-}
+void RS::environmentSkyUpdate(const std::shared_ptr<Image> image) {}
 
 void RenderingServer::draw() {
+	/*
 	RD &rd = RD::getSingleton();
-	rd.updateUniformBuffer(_camera.transform[3]);
-
-	vk::Extent2D extent = rd.getSwapchainExtent();
-	float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-
-	glm::mat4 proj = _camera.projectionMatrix(aspect);
-	glm::mat4 view = _camera.viewMatrix();
-
-	glm::mat4 invProj = glm::inverse(proj);
-	glm::mat4 invView = glm::inverse(view);
-
-	glm::mat4 projView = proj * view;
 
 	vk::CommandBuffer commandBuffer = rd.drawBegin();
 
+	vk::ClearValue clearValue;
+	clearValue.color = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+
+	vk::Extent2D extent = rd.getSwapchainExtent();
+
+	vk::Viewport viewport;
+	viewport.setX(0.0f);
+	viewport.setY(0.0f);
+	viewport.setWidth(extent.width);
+	viewport.setHeight(extent.height);
+	viewport.setMinDepth(0.0f);
+	viewport.setMaxDepth(1.0f);
+
+	vk::Rect2D scissor;
+	scissor.setOffset({ 0, 0 });
+	scissor.setExtent(extent);
+
+	vk::Rect2D renderArea;
+	renderArea.setOffset({ 0, 0 });
+	renderArea.setExtent(extent);
+
+	vk::RenderPassBeginInfo renderPassInfo;
+	renderPassInfo.setRenderPass(rd.getRenderPass());
+	renderPassInfo.setFramebuffer(rd.getFramebuffer());
+	renderPassInfo.setRenderArea(renderArea);
+	renderPassInfo.setClearValues(clearValue);
+
+	commandBuffer.beginRenderPass(&renderPassInfo, vk::SubpassContents::eInline);
+
+	commandBuffer.setViewport(0, viewport);
+	commandBuffer.setScissor(0, scissor);
+
+	commandBuffer.endRenderPass();
+
+	/*
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, rd.getDepthPipeline());
 
 	for (const auto &[_, meshInstance] : _meshInstances.map()) {
@@ -335,8 +289,10 @@ void RenderingServer::draw() {
 			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 		}
 	}
+	*/
 
-	rd.drawEnd(commandBuffer);
+	RenderSceneForward::getSingleton().draw();
+	// rd.drawEnd(commandBuffer);
 }
 
 vk::Instance RS::getVkInstance() const {
@@ -347,33 +303,8 @@ void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 	RD &rd = RD::getSingleton();
 	rd.windowInit(surface, width, height);
 
-	{
-		std::vector<uint8_t> data = { 255, 255, 255, 255 };
-		std::shared_ptr<Image> albedo(new Image(1, 1, Image::Format::RGBA8, data));
-
-		_albedoFallback = rd.textureCreate(albedo);
-	}
-
-	{
-		std::vector<uint8_t> data = { 127, 127 };
-		std::shared_ptr<Image> normal(new Image(1, 1, Image::Format::RG8, data));
-
-		_normalFallback = rd.textureCreate(normal);
-	}
-
-	{
-		std::vector<uint8_t> data = { 0 };
-		std::shared_ptr<Image> metallic(new Image(1, 1, Image::Format::R8, data));
-
-		_metallicFallback = rd.textureCreate(metallic);
-	}
-
-	{
-		std::vector<uint8_t> data = { 127 };
-		std::shared_ptr<Image> roughness(new Image(1, 1, Image::Format::R8, data));
-
-		_roughnessFallback = rd.textureCreate(roughness);
-	}
+	RenderSceneForward &scene = RenderSceneForward::getSingleton();
+	scene.init();
 }
 
 void RS::windowResized(uint32_t width, uint32_t height) {

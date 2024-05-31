@@ -6,8 +6,8 @@
 #include "shaders/irradiance_filter.gen.h"
 #include "shaders/specular_filter.gen.h"
 
+#include "../render_target.h"
 #include "../rendering_device.h"
-#include "../types/attachment.h"
 
 #include "environment_effects.h"
 
@@ -125,105 +125,6 @@ static vk::Sampler createSampler(vk::Device device, uint32_t mipLevels) {
 	createInfo.setMipLodBias(0.0f);
 
 	return device.createSampler(createInfo);
-}
-
-RenderTarget RenderTarget::create(
-		vk::Device device, uint32_t size, vk::PhysicalDeviceMemoryProperties memProperties) {
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
-	vk::ImageUsageFlags usage =
-			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc;
-
-	vk::ImageAspectFlagBits aspectFlags = vk::ImageAspectFlagBits::eColor;
-
-	assert(size > 0);
-
-	uint32_t arrayLayers = 6;
-
-	Attachment color = Attachment::create(device, size, size, format, usage, aspectFlags,
-			memProperties, arrayLayers, vk::ImageViewType::eCube,
-			vk::ImageCreateFlagBits::eCubeCompatible);
-
-	vk::AttachmentDescription colorAttachmentDescription = {};
-	colorAttachmentDescription.setFormat(format);
-	colorAttachmentDescription.setSamples(vk::SampleCountFlagBits::e1);
-	colorAttachmentDescription.setLoadOp(vk::AttachmentLoadOp::eDontCare);
-	colorAttachmentDescription.setStoreOp(vk::AttachmentStoreOp::eStore);
-	colorAttachmentDescription.setStencilLoadOp(vk::AttachmentLoadOp::eDontCare);
-	colorAttachmentDescription.setStencilStoreOp(vk::AttachmentStoreOp::eDontCare);
-	colorAttachmentDescription.setInitialLayout(vk::ImageLayout::eUndefined);
-	colorAttachmentDescription.setFinalLayout(vk::ImageLayout::eColorAttachmentOptimal);
-
-	vk::AttachmentReference colorRef = {};
-	colorRef.setAttachment(0);
-	colorRef.setLayout(vk::ImageLayout::eColorAttachmentOptimal);
-
-	vk::SubpassDescription subpass = {};
-	subpass.setPipelineBindPoint(vk::PipelineBindPoint::eGraphics);
-	subpass.setColorAttachments(colorRef);
-
-	// write from layer 0 (last bit) to layer 5
-	uint32_t viewMask = 0b00111111;
-	uint32_t correlationMask = 0b00111111;
-
-	vk::RenderPassMultiviewCreateInfo multiviewCreateInfo = {};
-	multiviewCreateInfo.setSubpassCount(1);
-	multiviewCreateInfo.setViewMasks(viewMask);
-	multiviewCreateInfo.setCorrelationMasks(correlationMask);
-
-	vk::RenderPassCreateInfo renderPassInfo = {};
-	renderPassInfo.setAttachments(colorAttachmentDescription);
-	renderPassInfo.setSubpasses(subpass);
-	renderPassInfo.setPNext(&multiviewCreateInfo);
-
-	vk::RenderPass renderPass = device.createRenderPass(renderPassInfo);
-
-	vk::ImageView colorView = color.getImageView();
-
-	vk::FramebufferCreateInfo framebufferInfo = {};
-	framebufferInfo.setRenderPass(renderPass);
-	framebufferInfo.setAttachments(colorView);
-	framebufferInfo.setWidth(size);
-	framebufferInfo.setHeight(size);
-	framebufferInfo.setLayers(1);
-
-	vk::Framebuffer framebuffer;
-	vk::Result err = device.createFramebuffer(&framebufferInfo, nullptr, &framebuffer);
-
-	if (err != vk::Result::eSuccess)
-		throw std::runtime_error("Failed to create multiview framebuffer!");
-
-	return RenderTarget(framebuffer, renderPass, color, size);
-}
-
-vk::Framebuffer RenderTarget::getFramebuffer() const {
-	return _framebuffer;
-}
-
-vk::RenderPass RenderTarget::getRenderPass() const {
-	return _renderPass;
-}
-
-Attachment RenderTarget::getColorAttachment() const {
-	return _color;
-}
-
-uint32_t RenderTarget::getSize() const {
-	return _size;
-}
-
-void RenderTarget::destroy(vk::Device device) {
-	_color.destroy(device);
-
-	device.destroyFramebuffer(_framebuffer, nullptr);
-	device.destroyRenderPass(_renderPass, nullptr);
-}
-
-RenderTarget::RenderTarget(
-		vk::Framebuffer framebuffer, vk::RenderPass renderPass, Attachment color, uint32_t size) {
-	_framebuffer = framebuffer;
-	_renderPass = renderPass;
-	_color = color;
-	_size = size;
 }
 
 void EnvironmentEffects::_createDescriptors(vk::DescriptorPool descriptorPool) {
@@ -379,7 +280,8 @@ void EnvironmentEffects::_createPipelines() {
 		_device.destroyShaderModule(computeModule);
 	}
 
-	RenderTarget rt = RenderTarget::create(_device, 1, _memProperties);
+	RenderTarget rt;
+	rt.createMultiview(1, vk::Format::eR32G32B32A32Sfloat);
 
 	{
 		vk::PipelineLayoutCreateInfo layoutCreateInfo = {};
@@ -429,7 +331,7 @@ void EnvironmentEffects::_createPipelines() {
 		_device.destroyShaderModule(fragmentStage);
 	}
 
-	rt.destroy(_device);
+	rt.destroy();
 }
 
 void EnvironmentEffects::_updateBrdfSet(vk::ImageView dstImageView) {
@@ -492,16 +394,16 @@ void EnvironmentEffects::_updateFilterSet(vk::ImageView srcImageView, vk::Sample
 
 void EnvironmentEffects::_drawIrradianceFilter(
 		vk::CommandBuffer commandBuffer, RenderTarget renderTarget) {
+	vk::Extent2D extent = renderTarget.getExtent();
+	vk::Offset2D offset(0, 0);
+
 	vk::Viewport viewport = {};
 	viewport.setX(0.0f);
 	viewport.setY(0.0f);
-	viewport.setWidth(renderTarget.getSize());
-	viewport.setHeight(renderTarget.getSize());
+	viewport.setWidth(extent.width);
+	viewport.setHeight(extent.height);
 	viewport.setMinDepth(0.0f);
 	viewport.setMaxDepth(1.0f);
-
-	vk::Extent2D extent(renderTarget.getSize(), renderTarget.getSize());
-	vk::Offset2D offset(0, 0);
 
 	vk::Rect2D scissor = {};
 	scissor.setExtent(extent);
@@ -532,16 +434,16 @@ void EnvironmentEffects::_drawIrradianceFilter(
 
 void EnvironmentEffects::_drawSpecularFilter(vk::CommandBuffer commandBuffer,
 		RenderTarget renderTarget, uint32_t size, float roughness) {
+	vk::Extent2D extent = renderTarget.getExtent();
+	vk::Offset2D offset(0, 0);
+
 	vk::Viewport viewport = {};
 	viewport.setX(0.0f);
 	viewport.setY(0.0f);
-	viewport.setWidth(renderTarget.getSize());
-	viewport.setHeight(renderTarget.getSize());
+	viewport.setWidth(extent.width);
+	viewport.setHeight(extent.height);
 	viewport.setMinDepth(0.0f);
 	viewport.setMaxDepth(1.0f);
-
-	vk::Extent2D extent(renderTarget.getSize(), renderTarget.getSize());
-	vk::Offset2D offset(0, 0);
 
 	vk::Rect2D scissor = {};
 	scissor.setExtent(extent);
@@ -649,7 +551,8 @@ void EnvironmentEffects::filterIrradiance(
 	vk::Sampler sampler = createSampler(_device, 1);
 	_updateFilterSet(srcCubemapView, sampler);
 
-	RenderTarget rt = RenderTarget::create(_device, size, _memProperties);
+	RenderTarget rt;
+	rt.createMultiview(size, vk::Format::eR32G32B32A32Sfloat);
 
 	RD &rd = RD::getSingleton();
 
@@ -659,7 +562,7 @@ void EnvironmentEffects::filterIrradiance(
 		rd.endSingleTimeCommands(commandBuffer);
 	}
 
-	vk::Image framebufferImage = rt.getColorAttachment().getImage();
+	vk::Image framebufferImage = rt.getColor().getImage();
 
 	// make framebuffer image valid source
 	rd.imageLayoutTransition(framebufferImage, format, 1, 6,
@@ -686,7 +589,7 @@ void EnvironmentEffects::filterIrradiance(
 	}
 
 	// render target is no longer needed
-	rt.destroy(_device);
+	rt.destroy();
 	_device.destroySampler(sampler);
 }
 
@@ -705,7 +608,8 @@ void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t s
 	for (uint32_t level = 0; level < dstMipLevels; level++) {
 		float roughness = static_cast<float>(level) / static_cast<float>(dstMipLevels - 1);
 
-		RenderTarget rt = RenderTarget::create(_device, levelSize, _memProperties);
+		RenderTarget rt;
+		rt.createMultiview(levelSize, vk::Format::eR32G32B32A32Sfloat);
 
 		{
 			vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
@@ -713,7 +617,7 @@ void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t s
 			rd.endSingleTimeCommands(commandBuffer);
 		}
 
-		vk::Image framebufferImage = rt.getColorAttachment().getImage();
+		vk::Image framebufferImage = rt.getColor().getImage();
 
 		rd.imageLayoutTransition(framebufferImage, format, 1, 6,
 				vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
@@ -721,7 +625,7 @@ void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t s
 		_copyImageToLevel(framebufferImage, dstCubemap, level, levelSize);
 
 		// render target is no longer needed
-		rt.destroy(_device);
+		rt.destroy();
 		levelSize = levelSize >> 1;
 	}
 

@@ -1,6 +1,6 @@
 #version 450
 
-layout(push_constant) uniform SkyConstants {
+layout(push_constant) uniform SkyEffectPushConstants {
 	mat4 invProj;
 	mat4 invView;
 };

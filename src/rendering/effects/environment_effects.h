@@ -4,30 +4,7 @@
 #include <cstdint>
 #include <vulkan/vulkan.hpp>
 
-#include "../types/attachment.h"
-
-class RenderTarget {
-private:
-	vk::Framebuffer _framebuffer;
-	vk::RenderPass _renderPass;
-
-	Attachment _color;
-	uint32_t _size;
-
-public:
-	static RenderTarget create(
-			vk::Device device, uint32_t size, vk::PhysicalDeviceMemoryProperties memProperties);
-
-	void destroy(vk::Device device);
-
-	vk::Framebuffer getFramebuffer() const;
-	vk::RenderPass getRenderPass() const;
-	Attachment getColorAttachment() const;
-	uint32_t getSize() const;
-
-	RenderTarget(vk::Framebuffer framebuffer, vk::RenderPass renderPass, Attachment color,
-			uint32_t size);
-};
+class RenderTarget;
 
 class EnvironmentEffects {
 private:

@@ -6,18 +6,12 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include "types/attachment.h"
-
 const std::vector<const char *> VALIDATION_LAYERS = { "VK_LAYER_KHRONOS_validation" };
 
 const std::vector<const char *> DEVICE_EXTENSIONS = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	VK_KHR_MULTIVIEW_EXTENSION_NAME,
 };
-
-const uint32_t DEPTH_PASS = 0;
-const uint32_t MAIN_PASS = 1;
-const uint32_t TONEMAP_PASS = 2;
 
 class VulkanContext {
 private:
@@ -27,7 +21,10 @@ private:
 	VkDebugUtilsMessengerEXT _debugMessenger;
 
 	vk::SurfaceKHR _surface;
+
 	vk::PhysicalDevice _physicalDevice;
+	vk::PhysicalDeviceMemoryProperties _memoryProperties;
+
 	vk::Device _device;
 
 	vk::Queue _graphicsQueue;
@@ -45,9 +42,6 @@ private:
 	vk::Extent2D _swapchainExtent;
 	vk::RenderPass _renderPass;
 
-	Attachment _color;
-	Attachment _depth;
-
 	vk::CommandPool _commandPool;
 
 	bool _initialized = false;
@@ -60,9 +54,11 @@ public:
 	void recreateSwapchain(uint32_t width, uint32_t height);
 
 	vk::Instance getInstance() const;
-
 	vk::SurfaceKHR getSurface() const;
+
 	vk::PhysicalDevice getPhysicalDevice() const;
+	vk::PhysicalDeviceMemoryProperties getMemoryProperties() const;
+
 	vk::Device getDevice() const;
 
 	vk::Queue getGraphicsQueue() const;
@@ -75,8 +71,6 @@ public:
 
 	vk::RenderPass getRenderPass() const;
 	vk::Framebuffer getFramebuffer(uint32_t imageIndex) const;
-
-	Attachment getColorAttachment() const;
 
 	vk::CommandPool getCommandPool() const;
 

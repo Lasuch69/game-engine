@@ -1,6 +1,6 @@
 #version 450
 
-layout(push_constant) uniform MeshPushConstants {
+layout(push_constant) uniform MaterialPushConstants {
 	mat4 projView;
 	mat4 model;
 };

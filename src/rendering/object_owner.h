@@ -20,6 +20,10 @@ public:
 		return _map;
 	}
 
+	const std::unordered_map<ObjectID, T> &map() const {
+		return _map;
+	}
+
 	uint64_t insert(T value) {
 		_last++;
 		_map[_last] = value;

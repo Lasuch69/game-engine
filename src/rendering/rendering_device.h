@@ -121,12 +121,6 @@ private:
 
 	EnvironmentData _environmentData;
 
-	void _generateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Format format,
-			uint32_t mipLevels, uint32_t arrayLayers = 1);
-
-	AllocatedImage _filterIrradiance(vk::ImageView srcCubemapView);
-	AllocatedImage _filterSpecular(vk::ImageView srcCubemapView, uint32_t size, uint32_t mipLevels);
-
 public:
 	RenderingDevice(RenderingDevice const &) = delete;
 	void operator=(RenderingDevice const &) = delete;
@@ -146,6 +140,8 @@ public:
 			uint32_t mipLevels, vk::ImageUsageFlags usage);
 	AllocatedImage imageCubeCreate(
 			uint32_t size, vk::Format format, uint32_t mipLevels, vk::ImageUsageFlags usage);
+	void imageGenerateMipmaps(vk::Image image, int32_t width, int32_t height, vk::Format format,
+			uint32_t mipLevels, uint32_t arrayLayers = 1);
 	void imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
 			uint32_t arrayLayers, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 	void imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size,

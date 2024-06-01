@@ -609,13 +609,25 @@ void EnvironmentEffects::_copyImageToLevel(
 	}
 }
 
-void EnvironmentEffects::generateBrdf(vk::ImageView dstImageView, uint32_t size) {
+AllocatedImage EnvironmentEffects::generateBRDF() {
 	RD &rd = RD::getSingleton();
-	_updateBrdfSet(dstImageView);
+
+	const vk::Format FORMAT = vk::Format::eR16G16Sfloat;
+	const uint32_t SIZE = 256;
+
+	AllocatedImage outImage = rd.imageCreate(SIZE, SIZE, FORMAT, 1,
+			vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+	rd.imageLayoutTransition(
+			outImage.image, FORMAT, 1, 1, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral);
+
+	vk::ImageView imageView = rd.imageViewCreate(outImage.image, FORMAT, 1);
+
+	_updateBrdfSet(imageView);
 
 	vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
-	uint32_t groupCount = (size + 15) / 16;
+	uint32_t groupCount = (SIZE + 15) / 16;
 	vk::PipelineBindPoint bindPoint = vk::PipelineBindPoint::eCompute;
 
 	commandBuffer.bindPipeline(bindPoint, _brdfPipeline);
@@ -623,12 +635,33 @@ void EnvironmentEffects::generateBrdf(vk::ImageView dstImageView, uint32_t size)
 	commandBuffer.dispatch(groupCount, groupCount, 1);
 
 	rd.endSingleTimeCommands(commandBuffer);
+
+	rd.imageViewDestroy(imageView);
+
+	rd.imageLayoutTransition(outImage.image, FORMAT, 1, 1, vk::ImageLayout::eGeneral,
+			vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	return outImage;
 }
 
-void EnvironmentEffects::imageCopyToCube(
-		vk::ImageView srcImageView, vk::ImageView dstCubemapView, uint32_t size) {
+AllocatedImage EnvironmentEffects::cubemapCreate(vk::ImageView imageView, uint32_t size) {
 	RD &rd = RD::getSingleton();
-	_updateCubemapSet(srcImageView, dstCubemapView);
+
+	const vk::Format FORMAT = vk::Format::eR32G32B32A32Sfloat;
+
+	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(size))) + 1;
+
+	AllocatedImage outImage = rd.imageCubeCreate(size, FORMAT, mipLevels,
+			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst |
+					vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eSampled);
+
+	rd.imageLayoutTransition(outImage.image, FORMAT, mipLevels, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eGeneral);
+
+	vk::ImageView outImageView =
+			rd.imageViewCreate(outImage.image, FORMAT, mipLevels, 6, vk::ImageViewType::eCube);
+
+	_updateCubemapSet(imageView, outImageView);
 
 	vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
@@ -640,18 +673,34 @@ void EnvironmentEffects::imageCopyToCube(
 	commandBuffer.dispatch(groupCount, groupCount, 6);
 
 	rd.endSingleTimeCommands(commandBuffer);
+
+	rd.imageViewDestroy(outImageView);
+
+	rd.imageLayoutTransition(outImage.image, FORMAT, mipLevels, 6, vk::ImageLayout::eGeneral,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	rd.imageGenerateMipmaps(outImage.image, size, size, FORMAT, mipLevels, 6);
+
+	return outImage;
 }
 
-void EnvironmentEffects::filterIrradiance(
-		vk::ImageView srcCubemapView, vk::Image dstCubemap, vk::Format format, uint32_t size) {
-	assert(format == vk::Format::eR32G32B32A32Sfloat);
-
+AllocatedImage EnvironmentEffects::filterIrradiance(vk::ImageView imageView) {
 	vk::Sampler sampler = createSampler(_device, 1);
-	_updateFilterSet(srcCubemapView, sampler);
+	_updateFilterSet(imageView, sampler);
 
-	RenderTarget rt = RenderTarget::create(_device, size, _memProperties);
+	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+
+	const uint32_t FILTERED_SIZE = 32;
+
+	RenderTarget rt = RenderTarget::create(_device, FILTERED_SIZE, _memProperties);
 
 	RD &rd = RD::getSingleton();
+
+	AllocatedImage outImage = rd.imageCubeCreate(FILTERED_SIZE, format, 1,
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
+
+	rd.imageLayoutTransition(outImage.image, format, 1, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eTransferDstOptimal);
 
 	{
 		vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
@@ -674,13 +723,13 @@ void EnvironmentEffects::filterIrradiance(
 	vk::ImageCopy copyInfo = {};
 	copyInfo.setSrcSubresource(subresource);
 	copyInfo.setDstSubresource(subresource);
-	copyInfo.setExtent(vk::Extent3D(size, size, 1));
+	copyInfo.setExtent(vk::Extent3D(FILTERED_SIZE, FILTERED_SIZE, 1));
 
 	{
 		vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
 
-		commandBuffer.copyImage(framebufferImage, vk::ImageLayout::eTransferSrcOptimal, dstCubemap,
-				vk::ImageLayout::eTransferDstOptimal, copyInfo);
+		commandBuffer.copyImage(framebufferImage, vk::ImageLayout::eTransferSrcOptimal,
+				outImage.image, vk::ImageLayout::eTransferDstOptimal, copyInfo);
 
 		rd.endSingleTimeCommands(commandBuffer);
 	}
@@ -688,28 +737,41 @@ void EnvironmentEffects::filterIrradiance(
 	// render target is no longer needed
 	rt.destroy(_device);
 	_device.destroySampler(sampler);
+
+	rd.imageLayoutTransition(outImage.image, format, 1, 6, vk::ImageLayout::eTransferDstOptimal,
+			vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	return outImage;
 }
 
-void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t srcSize,
-		uint32_t srcMipLevels, vk::Format format, vk::Image dstCubemap, uint32_t dstSize,
-		uint32_t dstMipLevels) {
-	assert(format == vk::Format::eR32G32B32A32Sfloat);
+AllocatedImage EnvironmentEffects::filterSpecular(
+		vk::ImageView imageView, uint32_t size, uint32_t mipLevels) {
+	vk::Sampler sampler = createSampler(_device, mipLevels);
+	_updateFilterSet(imageView, sampler);
 
-	vk::Sampler sampler = createSampler(_device, srcMipLevels);
-	_updateFilterSet(srcCubemapView, sampler);
+	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
 
-	uint32_t levelSize = dstSize;
+	const uint32_t BASE_SIZE = 128;
+	const uint32_t LEVEL_COUNT = 5;
+
+	uint32_t levelSize = BASE_SIZE;
 
 	RD &rd = RD::getSingleton();
 
-	for (uint32_t level = 0; level < dstMipLevels; level++) {
-		float roughness = static_cast<float>(level) / static_cast<float>(dstMipLevels - 1);
+	AllocatedImage outImage = rd.imageCubeCreate(BASE_SIZE, format, LEVEL_COUNT,
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled);
+
+	rd.imageLayoutTransition(outImage.image, format, LEVEL_COUNT, 6, vk::ImageLayout::eUndefined,
+			vk::ImageLayout::eTransferDstOptimal);
+
+	for (uint32_t level = 0; level < LEVEL_COUNT; level++) {
+		float roughness = static_cast<float>(level) / static_cast<float>(LEVEL_COUNT - 1);
 
 		RenderTarget rt = RenderTarget::create(_device, levelSize, _memProperties);
 
 		{
 			vk::CommandBuffer commandBuffer = rd.beginSingleTimeCommands();
-			_drawSpecularFilter(commandBuffer, rt, srcSize, roughness);
+			_drawSpecularFilter(commandBuffer, rt, size, roughness);
 			rd.endSingleTimeCommands(commandBuffer);
 		}
 
@@ -718,7 +780,7 @@ void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t s
 		rd.imageLayoutTransition(framebufferImage, format, 1, 6,
 				vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eTransferSrcOptimal);
 
-		_copyImageToLevel(framebufferImage, dstCubemap, level, levelSize);
+		_copyImageToLevel(framebufferImage, outImage.image, level, levelSize);
 
 		// render target is no longer needed
 		rt.destroy(_device);
@@ -726,6 +788,11 @@ void EnvironmentEffects::filterSpecular(vk::ImageView srcCubemapView, uint32_t s
 	}
 
 	_device.destroySampler(sampler);
+
+	rd.imageLayoutTransition(outImage.image, format, LEVEL_COUNT, 6,
+			vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
+
+	return outImage;
 }
 
 void EnvironmentEffects::init() {

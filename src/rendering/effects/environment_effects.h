@@ -29,6 +29,8 @@ public:
 			uint32_t size);
 };
 
+class AllocatedImage;
+
 class EnvironmentEffects {
 private:
 	vk::Device _device;
@@ -49,10 +51,10 @@ private:
 	vk::PipelineLayout _irradiancePipelineLayout;
 	vk::Pipeline _irradiancePipeline;
 
-	struct SpecularFilterConstants {
+	typedef struct {
 		uint32_t size;
 		float roughness;
-	};
+	} SpecularFilterConstants;
 
 	vk::PipelineLayout _specularPipelineLayout;
 	vk::Pipeline _specularPipeline;
@@ -76,13 +78,11 @@ private:
 	void _copyImageToLevel(vk::Image srcImage, vk::Image dstImage, uint32_t level, uint32_t size);
 
 public:
-	void generateBrdf(vk::ImageView dstImageView, uint32_t size);
-	void imageCopyToCube(vk::ImageView srcImageView, vk::ImageView dstCubemapView, uint32_t size);
+	AllocatedImage generateBRDF();
 
-	void filterIrradiance(
-			vk::ImageView srcCubemapView, vk::Image dstCubemap, vk::Format format, uint32_t size);
-	void filterSpecular(vk::ImageView srcCubemapView, uint32_t srcSize, uint32_t srcMipLevels,
-			vk::Format format, vk::Image dstCubemap, uint32_t dstSize, uint32_t dstMipLevels);
+	AllocatedImage cubemapCreate(vk::ImageView imageView, uint32_t size);
+	AllocatedImage filterIrradiance(vk::ImageView imageView);
+	AllocatedImage filterSpecular(vk::ImageView imageView, uint32_t size, uint32_t mipLevels);
 
 	void init();
 	~EnvironmentEffects();

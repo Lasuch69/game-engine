@@ -1,73 +1,75 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
 #include "include/filter_incl.glsl"
 
-layout(binding = 0, rg16) uniform writeonly image2D lut;
+layout(binding = 0, rg16) uniform writeonly image2D lutSampler;
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-float saturate(float n) {
-	return clamp(n, 0.0, 1.0);
+float saturate(float v) {
+return clamp(v, 0.0, 1.0);
 }
 
-float geometrySchlickGGX(float NdotV, float roughness) {
+float geometrySchlickGGX(float nDotV, float roughness) {
 	float a = roughness;
 	float k = (a * a) / 2.0;
 
-	float nom = NdotV;
-	float denom = NdotV * (1.0 - k) + k;
-
+	float nom = nDotV;
+	float denom = nDotV * (1.0 - k) + k;
 	return nom / denom;
 }
 
-float geometrySmith(float NdotV, float NdotL, float roughness) {
-	float ggx2 = geometrySchlickGGX(NdotV, roughness);
-	float ggx1 = geometrySchlickGGX(NdotL, roughness);
+float geometrySmith(float nDotV, float nDotL, float roughness) {
+	float ggx2 = geometrySchlickGGX(nDotV, roughness);
+	float ggx1 = geometrySchlickGGX(nDotL, roughness);
 	return ggx1 * ggx2;
 }
 
-vec2 integrateBRDF(float NdotV, float roughness) {
-	vec3 V;
-	V.x = sqrt(1.0 - NdotV * NdotV);
-	V.y = 0.0;
-	V.z = NdotV;
+vec2 integrateBRDF(float nDotV, float roughness) {
+	vec3 v;
+	v.x = sqrt(1.0 - nDotV * nDotV);
+	v.y = 0.0;
+	v.z = nDotV;
 
-	float A = 0.0;
-	float B = 0.0;
+	float a = 0.0;
+	float b = 0.0;
 
-	vec3 N = vec3(0.0, 0.0, 1.0);
+	vec3 n = vec3(0.0, 0.0, 1.0);
 
 	const uint SAMPLE_COUNT = 1024u;
-	for (uint i = 0u; i < SAMPLE_COUNT; ++i) {
-		vec2 Xi = hammersley(i, SAMPLE_COUNT);
-		vec3 H = importanceSampleGGX(Xi, N, roughness);
-		vec3 L = 2.0 * dot(V, H) * H - V;
 
-		float NdotL = saturate(L.z);
-		float NdotH = saturate(H.z);
-		float VdotH = saturate(dot(V, H));
+	for (uint i = 0u; i < SAMPLE_COUNT; i++) {
+		vec2 xi = hammersley(i, SAMPLE_COUNT);
+		vec3 h = importanceSampleGGX(xi, n, roughness);
+		vec3 l = 2.0 * dot(v, h) * h - v;
 
-		if (NdotL > 0.0) {
-			float G = geometrySmith(NdotV, NdotL, roughness);
-			float G_Vis = (G * VdotH) / (NdotH * NdotV);
-			float Fc = pow(1.0 - VdotH, 5.0);
+		float nDotL = saturate(l.z);
+		float nDotH = saturate(h.z);
+		float vDotH = saturate(dot(v, h));
 
-			A += (1.0 - Fc) * G_Vis;
-			B += Fc * G_Vis;
+		if (nDotL > 0.0) {
+			float geometry = geometrySmith(nDotV, nDotL, roughness);
+			float geometryVis = (geometry * vDotH) / (nDotH * nDotV);
+			float fc = pow(1.0 - vDotH, 5.0);
+
+			a += (1.0 - fc) * geometryVis;
+			b += fc * geometryVis;
 		}
 	}
 
-	return vec2(A, B) / float(SAMPLE_COUNT);
+	return vec2(a, b) / float(SAMPLE_COUNT);
 }
 
 void main() {
 	// offset x by 1 to avoid NaN artifacts
 	uvec2 offset = uvec2(1, 0);
 
-	vec2 lutSize = imageSize(lut);
+	vec2 lutSize = imageSize(lutSampler);
 	vec2 coords = vec2(gl_GlobalInvocationID.xy + offset) / lutSize;
 	vec2 brdf = integrateBRDF(coords.x, coords.y);
 
 	vec4 value = vec4(brdf, 0.0, 1.0);
-	imageStore(lut, ivec2(gl_GlobalInvocationID.xy), value);
+	imageStore(lutSampler, ivec2(gl_GlobalInvocationID.xy), value);
 }

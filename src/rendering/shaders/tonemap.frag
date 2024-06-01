@@ -1,25 +1,27 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
 #include "include/tonemap_incl.glsl"
+
+layout(location = 0) out vec4 outFragColor;
+
+layout(set = 0, binding = 0, input_attachment_index = 0) uniform subpassInput inputColor;
 
 layout(push_constant) uniform TonemapParameterConstants {
 	float exposure;
 	float white;
 };
 
-layout(set = 0, binding = 0, input_attachment_index = 0) uniform subpassInput inputColor;
-
-layout(location = 0) out vec4 fragColor;
-
-const float black = 0.00017578;
+const float BLACK = 0.00017578;
 
 void main() {
 	vec3 color = subpassLoad(inputColor).rgb;
 	color *= exposure;
 
-	color = agx(color, white, black);
+	color = agx(color, white, BLACK);
 	// color = agxLookPunchy(color);
 	color = agxEotf(color);
 
-	fragColor = vec4(color, 1.0);
+	outFragColor = vec4(color, 1.0);
 }

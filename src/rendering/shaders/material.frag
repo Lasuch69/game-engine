@@ -1,6 +1,17 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
 #include "include/light_incl.glsl"
+#include "include/std_incl.glsl"
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec3 inTangent;
+layout(location = 3) in vec2 inUV;
+layout(location = 4) in vec3 inBitangent;
+
+layout(location = 0) out vec4 outFragColor;
 
 layout(set = 0, binding = 0) uniform UniformBufferObject {
 	vec3 viewPosition;
@@ -9,184 +20,142 @@ layout(set = 0, binding = 0) uniform UniformBufferObject {
 	int pointLightCount;
 };
 
-layout(set = 1, binding = 0) uniform samplerCube environmentIrradiance;
-layout(set = 1, binding = 1) uniform samplerCube environmentSpecular;
-layout(set = 1, binding = 2) uniform sampler2D brdfLUT;
+layout(set = 1, binding = 0) uniform samplerCube irradianceSampler;
+layout(set = 1, binding = 1) uniform samplerCube specularSampler;
+layout(set = 1, binding = 2) uniform sampler2D lutSampler;
 
-layout(set = 2, binding = 0) readonly buffer DirectionalLightBuffer {
+layout(set = 2, binding = 0) readonly buffer DirectionalLightSSBO {
 	DirectionalLight directionalLights[];
 };
 
-layout(set = 2, binding = 1) readonly buffer PointLightBuffer {
+layout(set = 2, binding = 1) readonly buffer PointLightSSBO {
 	PointLight pointLights[];
 };
 
-layout(set = 3, binding = 0) uniform sampler2D albedoTexture;
-layout(set = 3, binding = 1) uniform sampler2D normalTexture;
-layout(set = 3, binding = 2) uniform sampler2D metallicTexture;
-layout(set = 3, binding = 3) uniform sampler2D roughnessTexture;
-
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inNormal;
-layout(location = 2) in vec3 inTangent;
-layout(location = 3) in vec2 inUV;
-layout(location = 4) in vec3 inBitangent;
-layout(location = 0) out vec4 fragColor;
+layout(set = 3, binding = 0) uniform sampler2D albedoSampler;
+layout(set = 3, binding = 1) uniform sampler2D normalSampler;
+layout(set = 3, binding = 2) uniform sampler2D metallicSampler;
+layout(set = 3, binding = 3) uniform sampler2D roughnessSampler;
 
 layout(early_fragment_tests) in;
 
-const float PI = 3.14159265359;
-
-float saturate(float n) {
-	return clamp(n, 0.0, 1.0);
-}
-
-vec3 deriveNormalZ(vec2 n) {
-	float z = sqrt(1.0 - saturate(dot(n, n)));
-	return vec3(n.x, n.y, z);
-}
-
-float distributionGGX(vec3 N, vec3 H, float roughness) {
+float distributionGGX(float nDotH, float roughness) {
 	float a = roughness * roughness;
 	float a2 = a * a;
-	float NdotH = max(dot(N, H), 0.0);
-	float NdotH2 = NdotH * NdotH;
+	float nDotH2 = nDotH * nDotH;
 
 	float num = a2;
-	float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+	float denom = (nDotH2 * (a2 - 1.0) + 1.0);
 	denom = PI * denom * denom;
-
 	return num / denom;
 }
 
-float geometrySchlickGGX(float NdotV, float roughness) {
+float geometrySchlickGGX(float nDotV, float roughness) {
 	float r = (roughness + 1.0);
 	float k = (r * r) / 8.0;
 
-	float num = NdotV;
-	float denom = NdotV * (1.0 - k) + k;
-
+	float num = nDotV;
+	float denom = nDotV * (1.0 - k) + k;
 	return num / denom;
 }
 
-float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
-	float NdotV = max(dot(N, V), 0.0);
-	float NdotL = max(dot(N, L), 0.0);
-	float ggx2 = geometrySchlickGGX(NdotV, roughness);
-	float ggx1 = geometrySchlickGGX(NdotL, roughness);
-
+float geometrySmith(float nDotV, float nDotL, float roughness) {
+	float ggx2 = geometrySchlickGGX(nDotV, roughness);
+	float ggx1 = geometrySchlickGGX(nDotL, roughness);
 	return ggx1 * ggx2;
 }
 
-vec3 fresnelSchlick(float cosTheta, vec3 F0) {
-	return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+vec3 fresnelSchlick(float cosTheta, vec3 f0) {
+	return f0 + (1.0 - f0) * pow(1.0 - cosTheta, 5.0);
 }
 
-vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
-	return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 f0, float roughness) {
+	return f0 + (max(vec3(1.0 - roughness), f0) - f0) * pow(saturate(1.0 - cosTheta), 5.0);
 }
 
-vec3 sRGBToLinear(vec3 c) {
-	return pow(c, vec3(2.2));
-}
+vec3 cookTorranceBRDF(float nDotV, float nDotL, float nDotH, float cosTheta, vec3 f0, float roughness, float metallic, vec3 albedo, vec3 radiance) {
+	float distribution = distributionGGX(nDotH, roughness);
+	float geometrySmith = geometrySmith(nDotV, nDotL, roughness);
+	vec3 fresnel = fresnelSchlick(cosTheta, f0);
 
-void main() {
-	vec3 albedo = sRGBToLinear(texture(albedoTexture, inUV).rgb);
-	vec3 normal = texture(normalTexture, inUV).xyz;
-	float metallic = texture(metallicTexture, inUV).r;
-	float roughness = texture(roughnessTexture, inUV).r;
-
-	// map from [0, 1] to [-1, +1] range
-	normal = normal * 2.0 - vec3(1.0);
-	normal = deriveNormalZ(normal.xy);
-
-	// tangent space to world space
-	normal = mat3(inTangent, inBitangent, inNormal) * normal;
-
-	vec3 N = normalize(normal);
-	vec3 V = normalize(viewPosition - inPosition);
-
-	vec3 F0 = vec3(0.04);
-	F0 = mix(F0, albedo, metallic);
-
-	vec3 Lo = vec3(0.0);
-
-	// directional lights
-	for (int i = 0; i < directionalLightCount; i++) {
-		vec3 lightDir = directionalLights[i].direction;
-		vec3 lightColor = directionalLights[i].color * directionalLights[i].intensity;
-
-		vec3 L = normalize(-lightDir);
-		vec3 H = normalize(V + L);
-
-		// cook-torrance brdf
-		float NDF = distributionGGX(N, H, roughness);
-		float G = geometrySmith(N, V, L, roughness);
-		vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-		vec3 kS = F;
-		vec3 kD = vec3(1.0) - kS;
-		kD *= 1.0 - metallic;
-
-		vec3 numerator = NDF * G * F;
-		float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-		vec3 specular = numerator / denominator;
-
-		// add to outgoing radiance Lo
-		float NdotL = max(dot(N, L), 0.0);
-		Lo += (kD * albedo / PI + specular) * lightColor * NdotL;
-	}
-
-	// point lights
-	for (int i = 0; i < pointLightCount; i++) {
-		vec3 lightPos = pointLights[i].position;
-		vec3 lightColor = pointLights[i].color * pointLights[i].intensity;
-
-		// calculate per-light radiance
-		vec3 L = normalize(lightPos - inPosition);
-		vec3 H = normalize(V + L);
-		float distance = length(lightPos - inPosition);
-		float attenuation = 1.0 / (distance * distance);
-		vec3 radiance = lightColor * attenuation;
-
-		// cook-torrance brdf
-		float NDF = distributionGGX(N, H, roughness);
-		float G = geometrySmith(N, V, L, roughness);
-		vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-		vec3 kS = F;
-		vec3 kD = vec3(1.0) - kS;
-		kD *= 1.0 - metallic;
-
-		vec3 numerator = NDF * G * F;
-		float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-		vec3 specular = numerator / denominator;
-
-		// add to outgoing radiance Lo
-		float NdotL = max(dot(N, L), 0.0);
-		Lo += (kD * albedo / PI + specular) * radiance * NdotL;
-	}
-
-	float NoV = saturate(dot(N, V));
-	vec3 R = 2.0 * dot(V, N) * N - V;
-	vec3 F = fresnelSchlickRoughness(NoV, F0, roughness);
-
-	vec3 kS = F;
+	vec3 kS = fresnel;
 	vec3 kD = vec3(1.0) - kS;
 	kD *= 1.0 - metallic;
 
-	vec3 irradiance = texture(environmentIrradiance, N).rgb;
+	vec3 numerator = distribution * geometrySmith * fresnel;
+	float denominator = 4.0 * nDotV * nDotL + 0.0001;
+	vec3 specular = numerator / denominator;
+
+	return (kD * albedo / PI + specular) * radiance * nDotL;
+}
+
+void main() {
+	vec3 albedo = sRGBToLinear(texture(albedoSampler, inUV).rgb);
+	float metallic = texture(metallicSampler, inUV).r;
+	float roughness = texture(roughnessSampler, inUV).r;
+
+	mat3 tbn = mat3(inTangent, inBitangent, inNormal);
+	vec3 normal = unpackNormal(texture(normalSampler, inUV).rg, tbn);
+	vec3 view = normalize(viewPosition - inPosition);
+
+	float nDotV = max(dot(normal, view), 0.0);
+
+	vec3 f0 = vec3(0.04);
+	f0 = mix(f0, albedo, metallic);
+
+	vec3 lightValue = vec3(0.0);
+
+	for (int i = 0; i < directionalLightCount; i++) {
+		DirectionalLight light = directionalLights[i];
+
+		vec3 lightDirection = normalize(-light.direction);
+		vec3 halfVector = normalize(view + lightDirection);
+
+		float nDotL = max(dot(normal, lightDirection), 0.0);
+		float nDotH = max(dot(normal, halfVector), 0.0);
+		float cosTheta = max(dot(halfVector, view), 0.0);
+
+		vec3 radiance = light.color * light.intensity;
+
+		lightValue += cookTorranceBRDF(nDotV, nDotL, nDotH, cosTheta, f0, roughness, metallic, albedo, radiance);
+	}
+
+	for (int i = 0; i < pointLightCount; i++) {
+		PointLight light = pointLights[i];
+
+		vec3 lightDirection = normalize(light.position - inPosition);
+		vec3 halfVector = normalize(view + lightDirection);
+
+		float nDotL = max(dot(normal, lightDirection), 0.0);
+		float nDotH = max(dot(normal, halfVector), 0.0);
+		float cosTheta = max(dot(halfVector, view), 0.0);
+
+		float distance = length(light.position - inPosition);
+		float attenuation = 1.0 / (distance * distance);
+		vec3 radiance = (light.color * light.intensity) * attenuation;
+
+		lightValue += cookTorranceBRDF(nDotV, nDotL, nDotH, cosTheta, f0, roughness, metallic, albedo, radiance);
+	}
+
+	vec3 fresnel = fresnelSchlickRoughness(nDotV, f0, roughness);
+
+	vec3 kS = fresnel;
+	vec3 kD = vec3(1.0) - kS;
+	kD *= 1.0 - metallic;
+
+	vec3 irradiance = texture(irradianceSampler, normal).rgb;
 	vec3 diffuse = irradiance * albedo;
 
 	const float MAX_REFLECTION_LOD = 4.0;
 	float lod = roughness * MAX_REFLECTION_LOD;
 
-	vec3 prefilteredColor = textureLod(environmentSpecular, R, lod).rgb;
-	vec2 envBRDF = texture(brdfLUT, vec2(NoV, roughness)).rg;
-	vec3 specular = prefilteredColor * (F * envBRDF.x + envBRDF.y);
+	vec3 reflect = 2.0 * dot(view, normal) * normal - view;
+	vec3 filteredColor = textureLod(specularSampler, reflect, lod).rgb;
+	vec2 brdf = texture(lutSampler, vec2(nDotV, roughness)).rg;
+	vec3 specular = filteredColor * (fresnel * brdf.x + brdf.y);
 
 	vec3 ambient = (kD * diffuse + specular);
-	vec3 color = ambient + Lo;
+	vec3 color = ambient + lightValue;
 
-	fragColor = vec4(color, 1.0);
+	outFragColor = vec4(color, 1.0);
 }

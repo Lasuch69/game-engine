@@ -1,14 +1,16 @@
 #version 450
 
+#extension GL_GOOGLE_include_directive : enable
+
 #include "include/cubemap_incl.glsl"
 
-layout(binding = 0, rgba32f) uniform readonly image2D image;
-layout(binding = 1, rgba32f) uniform writeonly imageCube cube;
+layout(binding = 0, rgba32f) uniform readonly image2D equirectangularSampler;
+layout(binding = 1, rgba32f) uniform writeonly imageCube cubeSampler;
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 void main() {
-	vec2 cubeSize = imageSize(cube);
+	vec2 cubeSize = imageSize(cubeSampler);
 
 	if (gl_GlobalInvocationID.x > cubeSize.x) {
 		return;
@@ -18,9 +20,9 @@ void main() {
 	vec3 spherical = mapToCube(coords, gl_GlobalInvocationID.z, false);
 
 	vec2 invAtan = vec2(0.1591, 0.3183);
-	vec2 eqUV = vec2(atan(spherical.z, spherical.x), asin(spherical.y)) * invAtan + 0.5;
-	ivec2 eqPixel = ivec2(eqUV * imageSize(image));
+	vec2 imageCoords = vec2(atan(spherical.z, spherical.x), asin(spherical.y)) * invAtan + 0.5;
+	ivec2 pixel = ivec2(imageCoords * imageSize(equirectangularSampler));
 
-	vec4 color = imageLoad(image, eqPixel);
-	imageStore(cube, ivec3(gl_GlobalInvocationID), color);
+	vec4 color = imageLoad(equirectangularSampler, pixel);
+	imageStore(cubeSampler, ivec3(gl_GlobalInvocationID), color);
 }

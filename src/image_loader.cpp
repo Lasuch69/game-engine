@@ -1,11 +1,15 @@
 #include <cassert>
 #include <cstdint>
+#include <cstring>
 
+#include <ConvectionKernels.h>
 #include <SDL2/SDL_log.h>
-
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>
 
+#include "rendering/rendering_device.h"
+
+#include "image.h"
 #include "image_loader.h"
 
 Image::Format asFormat(uint32_t channels) {
@@ -218,6 +222,105 @@ Image *_loadHDRFromFile(const std::filesystem::path &path) {
 	return new Image(width, height, Image::Format::RGBA32F, bytes);
 }
 
+_Float16 *getPixel(uint32_t x, uint32_t y, uint32_t w, uint32_t h, _Float16 *pData) {
+	if (x >= w)
+		x = w - 1;
+
+	if (y >= h)
+		y = h - 1;
+
+	size_t offset = ((y * w) + x) * 4;
+	return &pData[offset];
+}
+
+cvtt::PixelBlockF16 readBlock(
+		uint32_t offsetX, uint32_t offsetY, uint32_t w, uint32_t h, _Float16 *pBytes) {
+	cvtt::PixelBlockF16 block;
+
+	uint32_t i = 0;
+	for (int y = 0; y < 4; y++) {
+		for (int x = 0; x < 4; x++) {
+			uint32_t _x = offsetX + x;
+			uint32_t _y = offsetY + y;
+
+			uint16_t *pPixel = reinterpret_cast<uint16_t *>(getPixel(_x, _y, w, h, pBytes));
+
+			block.m_pixels[i][0] = pPixel[0];
+			block.m_pixels[i][1] = pPixel[1];
+			block.m_pixels[i][2] = pPixel[2];
+			block.m_pixels[i][3] = pPixel[3];
+
+			i++;
+		}
+	}
+
+	SDL_LogInfo(0, "x: %d, y: %d", offsetX, offsetY);
+	return block;
+}
+
+void ImageLoader::_compressCVTT(const Image *pImage) {
+	cvtt::Options options;
+	options.flags = cvtt::Flags::Ultra;
+
+	uint32_t width = pImage->getWidth();
+	uint32_t height = pImage->getHeight();
+
+	size_t size = width * height * 4;
+
+	// FIXME: _Float16 is probably GCC only :>
+	std::vector<_Float16> data = {};
+	data.resize(size);
+
+	{
+		std::vector<uint8_t> bytes = pImage->getData();
+		float *pData = reinterpret_cast<float *>(bytes.data());
+
+		for (size_t i = 0; i < size; i++) {
+			// cast float to half float
+			data[i] = static_cast<_Float16>(pData[i]);
+		}
+	}
+
+	const uint32_t BLOCK_SIZE = 4;
+
+	uint32_t w = ((width + 3) / 4) * 4;
+	uint32_t h = ((height + 3) / 4) * 4;
+
+	uint8_t *pOutBytes = new uint8_t[w * h];
+	size_t byteOffset = 0;
+
+	for (int by = 0; by < height; by += BLOCK_SIZE) {
+		for (int bx = 0; bx < width; bx += BLOCK_SIZE * cvtt::NumParallelBlocks) {
+			cvtt::PixelBlockF16 pInputBlocks[cvtt::NumParallelBlocks];
+
+			for (int i = 0; i < 8; i++)
+				pInputBlocks[i] = readBlock(bx + i * BLOCK_SIZE, by, width, height, data.data());
+
+			const size_t BYTE_SIZE = 16 * cvtt::NumParallelBlocks;
+
+			uint8_t pOutputBlocks[BYTE_SIZE];
+			cvtt::Kernels::EncodeBC6HS(pOutputBlocks, pInputBlocks, options);
+
+			memcpy(&pOutBytes[byteOffset], pOutputBlocks, BYTE_SIZE);
+			byteOffset += BYTE_SIZE;
+		}
+	}
+
+	{
+		RD &rd = RD::getSingleton();
+
+		AllocatedImage image = rd.imageCreate(width, height, vk::Format::eBc6HSfloatBlock, 1,
+				vk::ImageUsageFlagBits::eTransferDst);
+
+		rd.imageLayoutTransition(image.image, vk::Format::eBc6HSfloatBlock, 1, 1,
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
+
+		uint32_t size = w * h;
+		rd.imageSend(
+				image.image, width, height, pOutBytes, size, vk::ImageLayout::eTransferDstOptimal);
+	}
+}
+
 Image *ImageLoader::loadFromFile(const std::filesystem::path &path) {
 	return _loadFromFile(path);
 }
@@ -227,7 +330,12 @@ Image *ImageLoader::loadFromMemory(const std::vector<uint8_t> &bytes) {
 }
 
 Image *ImageLoader::loadHDRFromFile(const std::filesystem::path &path) {
-	return _loadHDRFromFile(path);
+	Image *pImage = _loadHDRFromFile(path);
+
+	ImageLoader loader;
+	loader._compressCVTT(pImage);
+
+	return pImage;
 }
 
 Image *ImageLoader::loadEXRFromFile(const std::filesystem::path &path) {

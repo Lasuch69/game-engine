@@ -3,10 +3,13 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <vector>
 
 #include "image.h"
 
 class ImageLoader {
+	void _compressCVTT(const Image *pImage);
+
 public:
 	static Image *loadFromFile(const std::filesystem::path &path);
 	static Image *loadFromMemory(const std::vector<uint8_t> &bytes);

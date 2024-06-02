@@ -8,45 +8,38 @@ class Image {
 public:
 	enum class Format {
 		R8,
-		L8,
 		RG8,
-		LA8,
 		RGB8,
 		RGBA8,
 		RGBA32F,
 	};
 
 	enum class Channel {
-		R,
-		G,
-		B,
-		A,
+		R = 0,
+		G = 1,
+		B = 2,
+		A = 3,
 	};
 
 private:
 	uint32_t _width, _height;
-	Format _format = Format::L8;
+	Format _format = Format::R8;
 	std::vector<uint8_t> _data = {};
 
-	struct Color {
-		uint8_t r, g, b = 0;
-		uint8_t a = 255;
-	};
-
-	Color _getPixelAtOffset(size_t offset) const;
-	void _setPixelAtOffset(size_t offset, const Color &color);
-
 public:
+	Image *extractComponent(Channel channel) const;
+
 	Image *getColorMap() const;
 	Image *getNormalMap() const;
 	Image *getMetallicMap(Channel channel) const;
 	Image *getRoughnessMap(Channel channel) const;
 
+	static size_t formatSize(Format format);
+	size_t getFormatSize() const;
+
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;
-
 	Format getFormat() const;
-	uint32_t getPixelSize() const;
 
 	std::vector<uint8_t> getData() const;
 

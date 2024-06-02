@@ -26,10 +26,8 @@
 static vk::Format getVkFormat(Image::Format format) {
 	switch (format) {
 		case Image::Format::R8:
-		case Image::Format::L8:
 			return vk::Format::eR8Unorm;
 		case Image::Format::RG8:
-		case Image::Format::LA8:
 			return vk::Format::eR8G8Unorm;
 		case Image::Format::RGB8:
 			return vk::Format::eR8G8B8Unorm;
@@ -37,9 +35,9 @@ static vk::Format getVkFormat(Image::Format format) {
 			return vk::Format::eR8G8B8A8Unorm;
 		case Image::Format::RGBA32F:
 			return vk::Format::eR32G32B32A32Sfloat;
-		default:
-			return vk::Format::eUndefined;
 	}
+
+	return vk::Format::eUndefined;
 }
 
 vk::ShaderModule createShaderModule(vk::Device device, const uint32_t *pCode, size_t size) {

@@ -2,8 +2,9 @@
 #include <iostream>
 #include <memory>
 
-#include <SDL2/SDL_vulkan.h>
 #include <glm/glm.hpp>
+
+#include <SDL3/SDL_vulkan.h>
 
 #include "../image.h"
 
@@ -347,10 +348,10 @@ void RS::windowInit(SDL_Window *pWindow) {
 	RD &rd = RD::getSingleton();
 
 	VkSurfaceKHR surface;
-	SDL_Vulkan_CreateSurface(pWindow, rd.getInstance(), &surface);
+	SDL_Vulkan_CreateSurface(pWindow, rd.getInstance(), nullptr, &surface);
 
 	int width, height;
-	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
+	SDL_GetWindowSizeInPixels(pWindow, &width, &height);
 	rd.windowInit(surface, width, height);
 
 	{

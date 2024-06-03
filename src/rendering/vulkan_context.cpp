@@ -6,8 +6,8 @@
 
 #include <version.h>
 
-#include <SDL2/SDL_log.h>
-#include <SDL2/SDL_vulkan.h>
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_vulkan.h>
 
 #include "vulkan_context.h"
 
@@ -60,11 +60,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 }
 
 std::vector<const char *> requiredExtensions(bool validationEnabled) {
-	uint32_t extensionCount = 0;
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
+	uint32_t count = 0;
+	const char *const *pExtensions = SDL_Vulkan_GetInstanceExtensions(&count);
 
-	std::vector<const char *> extensions(extensionCount);
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+	std::vector<const char *> extensions(count);
+	for (int i = 0; i < count; i++)
+		extensions[i] = pExtensions[i];
 
 	if (validationEnabled) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);

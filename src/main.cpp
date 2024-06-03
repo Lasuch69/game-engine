@@ -4,17 +4,11 @@
 #include <cstring>
 #include <filesystem>
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_log.h>
-#include <SDL2/SDL_mouse.h>
-
-#include <SDL2/SDL_vulkan.h>
-#include <vulkan/vulkan.hpp>
-
-#include <glm/fwd.hpp>
-#include <glm/gtc/type_ptr.hpp>
-#include <glm/trigonometric.hpp>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_video.h>
 
 #include <version.h>
 
@@ -28,17 +22,35 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
+void loadFile(Scene *pScene, char *pFile) {
+	std::filesystem::path path(pFile);
+	const char *pExtension = path.extension().c_str();
+
+	if (strcmp(pExtension, ".hdr") == 0) {
+		std::shared_ptr<Image> image(ImageLoader::loadHDRFromFile(path));
+		RS::getSingleton().environmentSkyUpdate(image);
+		return;
+	}
+
+	if (strcmp(pExtension, ".exr") == 0) {
+		std::shared_ptr<Image> image(ImageLoader::loadEXRFromFile(path));
+		RS::getSingleton().environmentSkyUpdate(image);
+		return;
+	}
+
+	pScene->clear();
+	pScene->load(path);
+}
+
 int main(int argc, char *argv[]) {
 	printf("Hayaku Engine -- Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 	printf("Author: Lasuch69 2024\n\n");
 
-	SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
-
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_INFO);
 
-	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", SDL_WINDOWPOS_CENTERED,
-			SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+	SDL_Window *pWindow = SDL_CreateWindow(
+			"Hayaku Engine", WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 
 	if (pWindow == nullptr) {
 		SDL_LogCritical(SDL_LOG_CATEGORY_VIDEO, "Failed to create window!\n");
@@ -67,51 +79,27 @@ int main(int argc, char *argv[]) {
 
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT)
+			if (event.type == SDL_EVENT_QUIT)
 				quit = true;
 
-			if (event.type == SDL_WINDOWEVENT) {
-				switch (event.window.event) {
-					case SDL_WINDOWEVENT_RESIZED:
-						int width, height;
-						SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-						RS::getSingleton().windowResized(width, height);
-						break;
-					default:
-						break;
-				}
+			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+				int width, height;
+				SDL_GetWindowSizeInPixels(pWindow, &width, &height);
+
+				RS::getSingleton().windowResized(width, height);
 			}
 
-			if (event.type == SDL_DROPFILE) {
-				char *pFile = event.drop.file;
-				std::filesystem::path path(pFile);
-				SDL_free(pFile);
-
-				const char *pExtension = path.extension().c_str();
-
-				if (strcmp(pExtension, ".hdr") == 0) {
-					std::shared_ptr<Image> image(ImageLoader::loadHDRFromFile(path));
-					RS::getSingleton().environmentSkyUpdate(image);
-					break;
-				}
-
-				if (strcmp(pExtension, ".exr") == 0) {
-					std::shared_ptr<Image> image(ImageLoader::loadEXRFromFile(path));
-					RS::getSingleton().environmentSkyUpdate(image);
-					break;
-				}
-
-				pScene->clear();
-				pScene->load(path);
+			if (event.type == SDL_EVENT_DROP_FILE) {
+				char *pFile = event.drop.data;
+				loadFile(pScene, pFile);
 			}
 
-			if (event.type == SDL_KEYDOWN) {
-				switch (event.key.keysym.sym) {
-					case SDLK_F2:
-						bool isRelative = SDL_GetRelativeMouseMode();
-						SDL_SetRelativeMouseMode((SDL_bool)!isRelative);
-						break;
-				}
+			if (event.type == SDL_EVENT_KEY_DOWN) {
+				if (event.key.keysym.sym != SDLK_F2)
+					continue;
+
+				bool isRelative = SDL_GetRelativeMouseMode();
+				SDL_SetRelativeMouseMode((SDL_bool)!isRelative);
 			}
 		}
 

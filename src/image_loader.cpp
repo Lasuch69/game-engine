@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cstdint>
 
-#include <SDL2/SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #include <stb/stb_image.h>
 #include <tinyexr/tinyexr.h>

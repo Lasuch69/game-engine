@@ -12,10 +12,14 @@ configure_file(
 )
 
 find_package(Vulkan REQUIRED)
-set(LIBRARIES "SDL2;Vulkan::Vulkan")
 
 # compile shaders
 execute_process(COMMAND python3 shader_gen.py)
+
+# SDL3
+
+add_library(SDL3 SHARED IMPORTED)
+set_property(TARGET SDL3 PROPERTY IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/lib/libSDL3.so")
 
 # fastgltf
 
@@ -67,6 +71,7 @@ add_executable(hayaku
 target_include_directories(hayaku PRIVATE
 	include
 	thirdparty
+	thirdparty/SDL3/include
 	thirdparty/stb/include
 	thirdparty/vma/include
 	thirdparty/fastgltf/include
@@ -74,4 +79,4 @@ target_include_directories(hayaku PRIVATE
 )
 
 target_compile_options(hayaku PRIVATE -Wall -O2)
-target_link_libraries(hayaku ${LIBRARIES} fastgltf zlib)
+target_link_libraries(hayaku PRIVATE Vulkan::Vulkan SDL3 fastgltf zlib)

@@ -4,7 +4,7 @@
 #include <memory>
 #include <stdexcept>
 
-#include <SDL2/SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"

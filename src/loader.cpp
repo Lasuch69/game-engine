@@ -16,7 +16,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
 
-#include <SDL2/SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #include "image_loader.h"
 #include "loader.h"

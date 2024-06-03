@@ -2,7 +2,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include <SDL2/SDL_log.h>
+#include <SDL3/SDL_log.h>
 
 #include "image.h"
 

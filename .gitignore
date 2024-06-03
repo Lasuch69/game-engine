@@ -15,6 +15,7 @@ _deps
 
 # compile output
 *.so
+*.so.*
 *.o
 *.a
 

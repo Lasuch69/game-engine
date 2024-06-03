@@ -1,7 +1,8 @@
-#include <SDL2/SDL.h>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
+
+#include <SDL3/SDL.h>
 
 #include "rendering/rendering_server.h"
 
@@ -33,7 +34,7 @@ void CameraController::update(float deltaTime) {
 		return;
 	}
 
-	int x, y;
+	float x, y;
 	SDL_GetRelativeMouseState(&x, &y);
 
 	if (_reset) {

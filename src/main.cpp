@@ -1,6 +1,3 @@
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_log.h>
-#include <SDL2/SDL_mouse.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -8,11 +5,16 @@
 #include <filesystem>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_log.h>
+#include <SDL2/SDL_mouse.h>
+
 #include <SDL2/SDL_vulkan.h>
+#include <vulkan/vulkan.hpp>
+
 #include <glm/fwd.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/trigonometric.hpp>
-#include <vulkan/vulkan.hpp>
 
 #include <version.h>
 
@@ -26,27 +28,6 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-SDL_Window *windowInitialize(int argc, char *argv[]) {
-	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", SDL_WINDOWPOS_CENTERED,
-			SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
-
-	if (pWindow == nullptr) {
-		SDL_LogCritical(SDL_LOG_CATEGORY_VIDEO, "Failed to create window!\n");
-		return nullptr;
-	}
-
-	RS::getSingleton().initialize(argc, argv);
-
-	VkSurfaceKHR surface;
-	SDL_Vulkan_CreateSurface(pWindow, RS::getSingleton().getVkInstance(), &surface);
-
-	int width, height;
-	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
-	RS::getSingleton().windowInit(surface, width, height);
-
-	return pWindow;
-}
-
 int main(int argc, char *argv[]) {
 	printf("Hayaku Engine -- Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 	printf("Author: Lasuch69 2024\n\n");
@@ -56,10 +37,16 @@ int main(int argc, char *argv[]) {
 	SDL_Init(SDL_INIT_VIDEO);
 	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_INFO);
 
-	SDL_Window *pWindow = windowInitialize(argc, argv);
+	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+
 	if (pWindow == nullptr) {
+		SDL_LogCritical(SDL_LOG_CATEGORY_VIDEO, "Failed to create window!\n");
 		return EXIT_FAILURE;
 	}
+
+	RS::getSingleton().initialize(argc, argv);
+	RS::getSingleton().windowInit(pWindow);
 
 	Scene *pScene = new Scene;
 

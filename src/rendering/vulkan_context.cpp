@@ -7,6 +7,7 @@
 #include <version.h>
 
 #include <SDL2/SDL_log.h>
+#include <SDL2/SDL_vulkan.h>
 
 #include "vulkan_context.h"
 
@@ -58,8 +59,21 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 }
 
-vk::Instance createInstance(std::vector<const char *> extensions, bool useValidation,
-		VkDebugUtilsMessengerEXT *pDebugMessenger) {
+std::vector<const char *> requiredExtensions(bool validationEnabled) {
+	uint32_t extensionCount = 0;
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
+
+	std::vector<const char *> extensions(extensionCount);
+	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
+
+	if (validationEnabled) {
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+
+	return extensions;
+}
+
+vk::Instance createInstance(bool useValidation, VkDebugUtilsMessengerEXT *pDebugMessenger) {
 	uint32_t version = VK_MAKE_VERSION(VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
 
 	vk::ApplicationInfo appInfo{};
@@ -69,9 +83,7 @@ vk::Instance createInstance(std::vector<const char *> extensions, bool useValida
 	appInfo.setEngineVersion(version);
 	appInfo.setApiVersion(VK_API_VERSION_1_1);
 
-	if (useValidation) {
-		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	}
+	std::vector<const char *> extensions = requiredExtensions(useValidation);
 
 	vk::InstanceCreateInfo createInfo = {};
 	createInfo.setPApplicationInfo(&appInfo);
@@ -180,7 +192,7 @@ bool isDeviceSuitable(vk::PhysicalDevice physicalDevice, vk::SurfaceKHR surface)
 }
 
 vk::PhysicalDevice pickPhysicalDevice(vk::Instance instance, vk::SurfaceKHR surface) {
-	vk::PhysicalDevice chosenDevice = VK_NULL_HANDLE;
+	vk::PhysicalDevice chosenDevice = {};
 	std::vector<vk::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
 
 	if (devices.empty()) {
@@ -612,14 +624,14 @@ vk::CommandPool VulkanContext::getCommandPool() const {
 	return _commandPool;
 }
 
-VulkanContext::VulkanContext(std::vector<const char *> extensions, bool validation) {
+VulkanContext::VulkanContext(bool validation) {
 	if (validation && !checkValidationLayerSupport()) {
 		SDL_LogWarn(SDL_LOG_PRIORITY_WARN, "Validation not supported!");
 		validation = false;
 	}
 
 	this->_validation = validation;
-	_instance = createInstance(extensions, validation, &_debugMessenger);
+	_instance = createInstance(validation, &_debugMessenger);
 }
 
 VulkanContext::~VulkanContext() {

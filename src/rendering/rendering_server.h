@@ -16,6 +16,7 @@
 
 #define NULL_HANDLE 0
 
+struct SDL_Window;
 class Image;
 
 class RenderingServer {
@@ -94,7 +95,7 @@ public:
 
 	vk::Instance getVkInstance() const;
 
-	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
+	void windowInit(SDL_Window *pWindow);
 	void windowResized(uint32_t width, uint32_t height);
 
 	void initialize(int argc, char **argv);

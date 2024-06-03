@@ -80,7 +80,7 @@ public:
 
 	vk::CommandPool getCommandPool() const;
 
-	VulkanContext(std::vector<const char *> extensions, bool validation = false);
+	VulkanContext(bool validation = false);
 	~VulkanContext();
 };
 

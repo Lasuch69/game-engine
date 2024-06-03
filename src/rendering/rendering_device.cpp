@@ -1270,6 +1270,6 @@ void RD::windowResize(uint32_t width, uint32_t height) {
 	_resized = true;
 }
 
-void RD::init(std::vector<const char *> extensions, bool useValidation) {
-	_pContext = new VulkanContext(extensions, useValidation);
+void RD::init(bool useValidation) {
+	_pContext = new VulkanContext(useValidation);
 }

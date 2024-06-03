@@ -343,8 +343,14 @@ vk::Instance RS::getVkInstance() const {
 	return RD::getSingleton().getInstance();
 }
 
-void RS::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
+void RS::windowInit(SDL_Window *pWindow) {
 	RD &rd = RD::getSingleton();
+
+	VkSurfaceKHR surface;
+	SDL_Vulkan_CreateSurface(pWindow, rd.getInstance(), &surface);
+
+	int width, height;
+	SDL_Vulkan_GetDrawableSize(pWindow, &width, &height);
 	rd.windowInit(surface, width, height);
 
 	{
@@ -380,16 +386,6 @@ void RS::windowResized(uint32_t width, uint32_t height) {
 	RD::getSingleton().windowResize(width, height);
 }
 
-std::vector<const char *> getRequiredExtensions() {
-	uint32_t extensionCount = 0;
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, nullptr);
-
-	std::vector<const char *> extensions(extensionCount);
-	SDL_Vulkan_GetInstanceExtensions(nullptr, &extensionCount, extensions.data());
-
-	return extensions;
-}
-
 void RS::initialize(int argc, char **argv) {
 	bool useValidation = false;
 
@@ -398,6 +394,5 @@ void RS::initialize(int argc, char **argv) {
 			useValidation = true;
 	}
 
-	std::vector<const char *> extensions = getRequiredExtensions();
-	RD::getSingleton().init(extensions, useValidation);
+	RD::getSingleton().init(useValidation);
 }

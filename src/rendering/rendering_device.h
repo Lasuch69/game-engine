@@ -192,8 +192,6 @@ public:
 	vk::CommandBuffer drawBegin();
 	void drawEnd(vk::CommandBuffer commandBuffer);
 
-	void initImGui();
-
 	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
 	void windowResize(uint32_t width, uint32_t height);
 

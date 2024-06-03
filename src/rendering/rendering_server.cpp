@@ -390,10 +390,6 @@ std::vector<const char *> getRequiredExtensions() {
 	return extensions;
 }
 
-void RS::initImGui() {
-	RD::getSingleton().initImGui();
-}
-
 void RS::initialize(int argc, char **argv) {
 	bool useValidation = false;
 

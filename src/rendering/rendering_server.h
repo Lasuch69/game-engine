@@ -97,8 +97,6 @@ public:
 	void windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height);
 	void windowResized(uint32_t width, uint32_t height);
 
-	void initImGui();
-
 	void initialize(int argc, char **argv);
 };
 

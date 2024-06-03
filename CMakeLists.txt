@@ -29,22 +29,6 @@ add_library(fastgltf
 target_include_directories(fastgltf PRIVATE ${FASTGLTF_DIR}/deps/simdjson ${FASTGLTF_DIR}/include)
 target_compile_options(fastgltf PRIVATE -O3)
 
-# ImGui
-
-set(IMGUI_DIR thirdparty/imgui)
-
-add_library(imgui
-	${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-	${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
-	${IMGUI_DIR}/imgui.cpp
-	${IMGUI_DIR}/imgui_demo.cpp
-	${IMGUI_DIR}/imgui_draw.cpp
-	${IMGUI_DIR}/imgui_tables.cpp
-	${IMGUI_DIR}/imgui_widgets.cpp
-)
-target_include_directories(imgui PRIVATE ${IMGUI_DIR})
-target_compile_options(imgui PRIVATE -O3)
-
 # ZLib
 
 set(ZLIB_DIR thirdparty/zlib)
@@ -86,10 +70,8 @@ target_include_directories(hayaku PRIVATE
 	thirdparty/stb/include
 	thirdparty/vma/include
 	thirdparty/fastgltf/include
-	thirdparty/imgui
-	thirdparty/imgui/backends
 	thirdparty/zlib
 )
 
 target_compile_options(hayaku PRIVATE -Wall -O2)
-target_link_libraries(hayaku ${LIBRARIES} fastgltf imgui zlib)
+target_link_libraries(hayaku ${LIBRARIES} fastgltf zlib)

@@ -14,7 +14,7 @@
 #include "camera_controller.h"
 #include "io/image_loader.h"
 #include "scene.h"
-#include "time.h"
+#include "timer.h"
 
 #include "rendering/rendering_server.h"
 
@@ -22,7 +22,7 @@ typedef struct {
 	SDL_Window *pWindow;
 
 	CameraController camera;
-	Time time;
+	Timer timer;
 	Scene scene;
 } AppState;
 
@@ -59,9 +59,9 @@ int SDL_AppInit(void **appstate, int argc, char **argv) {
 int SDL_AppIterate(void *appstate) {
 	AppState *pState = reinterpret_cast<AppState *>(appstate);
 
-	pState->time.tick();
+	pState->timer.tick();
 
-	float deltaTime = pState->time.deltaTime();
+	float deltaTime = pState->timer.deltaTime();
 	pState->camera.update(deltaTime);
 
 	RS::getSingleton().draw();

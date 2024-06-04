@@ -1,11 +1,11 @@
-#ifndef TIME_H
-#define TIME_H
+#ifndef TIMER_H
+#define TIMER_H
 
 #include <cstdint>
 
 #include <SDL3/SDL_timer.h>
 
-class Time {
+class Timer {
 private:
 	uint64_t _now;
 	uint64_t _last;
@@ -22,9 +22,9 @@ public:
 		return _deltaTime;
 	}
 
-	Time() {
+	Timer() {
 		_now = SDL_GetPerformanceCounter();
 	}
 };
 
-#endif // !TIME_H
+#endif // !TIMER_H

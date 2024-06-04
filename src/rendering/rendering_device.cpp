@@ -6,6 +6,8 @@
 
 #include <SDL3/SDL_log.h>
 
+#include <io/image.h>
+
 #include "shaders/depth.gen.h"
 #include "shaders/material.gen.h"
 #include "shaders/sky.gen.h"
@@ -15,8 +17,6 @@
 #include "types/vertex.h"
 
 #include "effects/environment_effects.h"
-
-#include "../io/image.h"
 
 #include "rendering_device.h"
 

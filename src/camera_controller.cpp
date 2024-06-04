@@ -2,7 +2,7 @@
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
 
-#include <SDL3/SDL.h>
+#include <SDL3/SDL_mouse.h>
 
 #include "rendering/rendering_server.h"
 

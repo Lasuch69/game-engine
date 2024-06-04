@@ -6,7 +6,7 @@
 
 #include <SDL3/SDL_vulkan.h>
 
-#include "../io/image.h"
+#include <io/image.h>
 
 #include "rendering_device.h"
 #include "rendering_server.h"

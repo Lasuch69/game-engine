@@ -69,6 +69,7 @@ add_executable(hayaku
 )
 
 target_include_directories(hayaku PRIVATE
+	src
 	include
 	thirdparty
 	thirdparty/SDL3/include

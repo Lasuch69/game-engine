@@ -3,8 +3,8 @@
 
 #include <glm/glm.hpp>
 
-#include "../object_owner.h"
-#include "../types/allocated.h"
+#include <rendering/object_owner.h>
+#include <rendering/types/allocated.h>
 
 const uint32_t MAX_DIRECTIONAL_LIGHT_COUNT = 8;
 const uint32_t MAX_POINT_LIGHT_COUNT = 2048;

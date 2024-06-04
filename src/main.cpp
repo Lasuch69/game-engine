@@ -13,10 +13,9 @@
 
 #include "camera_controller.h"
 #include "io/image_loader.h"
+#include "rendering/rendering_server.h"
 #include "scene.h"
 #include "timer.h"
-
-#include "rendering/rendering_server.h"
 
 typedef struct {
 	SDL_Window *pWindow;

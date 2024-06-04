@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "../rendering/types/vertex.h"
+#include <rendering/types/vertex.h>
+
 #include "image.h"
 
 namespace AssetLoader {

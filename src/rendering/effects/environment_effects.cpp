@@ -1,13 +1,13 @@
 #include <cstdint>
 #include <stdexcept>
 
+#include <rendering/rendering_device.h>
+#include <rendering/types/attachment.h>
+
 #include "shaders/brdf.gen.h"
 #include "shaders/cubemap.gen.h"
 #include "shaders/irradiance_filter.gen.h"
 #include "shaders/specular_filter.gen.h"
-
-#include "../rendering_device.h"
-#include "../types/attachment.h"
 
 #include "environment_effects.h"
 

@@ -1,7 +1,7 @@
 #ifndef CAMERA_CONTROLLER_H
 #define CAMERA_CONTROLLER_H
 
-#include <SDL2/SDL.h>
+#include <SDL3/SDL.h>
 #include <glm/glm.hpp>
 
 class CameraController {

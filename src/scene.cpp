@@ -2,9 +2,9 @@
 #include <filesystem>
 #include <optional>
 
+#include "io/asset_loader.h"
 #include "rendering/rendering_server.h"
 
-#include "io/asset_loader.h"
 #include "scene.h"
 
 bool Scene::load(const std::filesystem::path &path) {

@@ -1,15 +1,15 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <memory>
+
+#define SDL_MAIN_USE_CALLBACKS
+#include <SDL3/SDL_main.h>
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_error.h>
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_log.h>
-#include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_video.h>
-
-#include <version.h>
 
 #include "camera_controller.h"
 #include "io/image_loader.h"
@@ -18,84 +18,94 @@
 
 #include "rendering/rendering_server.h"
 
+typedef struct {
+	SDL_Window *pWindow;
+
+	CameraController camera;
+	Time time;
+	Scene scene;
+} AppState;
+
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-int main(int argc, char *argv[]) {
-	printf("Hayaku Engine -- Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH);
-	printf("Author: Lasuch69 2024\n\n");
-
-	SDL_Init(SDL_INIT_VIDEO);
-	SDL_LogSetAllPriority(SDL_LOG_PRIORITY_INFO);
-
-	SDL_Window *pWindow = SDL_CreateWindow(
-			"Hayaku Engine", WIDTH, HEIGHT, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+int SDL_AppInit(void **appstate, int argc, char **argv) {
+	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
+	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", WIDTH, HEIGHT, flags);
 
 	if (pWindow == nullptr) {
-		SDL_LogCritical(SDL_LOG_CATEGORY_VIDEO, "Failed to create window!\n");
-		return EXIT_FAILURE;
+		SDL_LogCritical(SDL_LOG_CATEGORY_APPLICATION, "%s", SDL_GetError());
+		return -1;
 	}
 
 	RS::getSingleton().initialize(argc, argv);
 	RS::getSingleton().windowInit(pWindow);
 
-	Scene scene;
+	AppState *pState = new AppState;
+	pState->pWindow = pWindow;
 
 	for (int i = 1; i < argc; i++) {
 		// --scene <path>
 		if (strcmp("--scene", argv[i]) == 0 && i < argc - 1) {
 			const char *pFile = argv[i + 1];
-			scene.load(pFile);
+			pState->scene.load(pFile);
 		}
 	}
 
-	Time time;
-	CameraController camera;
+	appstate[0] = reinterpret_cast<void *>(pState);
+	return 0;
+}
 
-	bool quit = false;
-	while (!quit) {
-		time.tick();
+int SDL_AppIterate(void *appstate) {
+	AppState *pState = reinterpret_cast<AppState *>(appstate);
 
-		SDL_Event event;
-		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_EVENT_QUIT)
-				quit = true;
+	pState->time.tick();
 
-			if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-				int width, height;
-				SDL_GetWindowSizeInPixels(pWindow, &width, &height);
+	float deltaTime = pState->time.deltaTime();
+	pState->camera.update(deltaTime);
 
-				RS::getSingleton().windowResized(width, height);
-			}
+	RS::getSingleton().draw();
 
-			if (event.type == SDL_EVENT_DROP_FILE) {
-				const char *pFile = event.drop.data;
+	return 0;
+}
 
-				if (ImageLoader::isImage(pFile)) {
-					std::shared_ptr<Image> image = ImageLoader::loadFromFile(pFile);
-					RS::getSingleton().environmentSkyUpdate(image);
-					continue;
-				}
+int SDL_AppEvent(void *appstate, const SDL_Event *event) {
+	AppState *pState = reinterpret_cast<AppState *>(appstate);
 
-				scene.clear();
-				scene.load(pFile);
-			}
+	if (event->type == SDL_EVENT_QUIT)
+		return 1;
 
-			if (event.type == SDL_EVENT_KEY_DOWN) {
-				if (event.key.keysym.sym != SDLK_F2)
-					continue;
-
-				bool isRelative = SDL_GetRelativeMouseMode();
-				SDL_SetRelativeMouseMode((SDL_bool)!isRelative);
-			}
-		}
-
-		camera.update(time.deltaTime());
-		RS::getSingleton().draw();
+	if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+		int width, height;
+		SDL_GetWindowSizeInPixels(pState->pWindow, &width, &height);
+		RS::getSingleton().windowResized(width, height);
+		return 0;
 	}
 
-	SDL_DestroyWindow(pWindow);
-	SDL_Quit();
+	if (event->type == SDL_EVENT_DROP_FILE) {
+		const char *pFile = event->drop.data;
 
-	return EXIT_SUCCESS;
+		if (ImageLoader::isImage(pFile)) {
+			std::shared_ptr<Image> image = ImageLoader::loadFromFile(pFile);
+			RS::getSingleton().environmentSkyUpdate(image);
+			return 0;
+		}
+
+		pState->scene.clear();
+		pState->scene.load(pFile);
+		return 0;
+	}
+
+	if (event->type == SDL_EVENT_KEY_DOWN && event->key.keysym.sym == SDLK_F2) {
+		SDL_SetRelativeMouseMode(!SDL_GetRelativeMouseMode());
+		return 0;
+	}
+
+	return 0;
+}
+
+void SDL_AppQuit(void *appstate) {
+	AppState *pState = reinterpret_cast<AppState *>(appstate);
+	SDL_DestroyWindow(pState->pWindow);
+	free(pState);
 }

@@ -1,5 +1,5 @@
-#ifndef LOADER_H
-#define LOADER_H
+#ifndef ASSET_LOADER_H
+#define ASSET_LOADER_H
 
 #include <cstdint>
 #include <filesystem>
@@ -8,10 +8,10 @@
 #include <string>
 #include <vector>
 
+#include "../rendering/types/vertex.h"
 #include "image.h"
-#include "rendering/types/vertex.h"
 
-namespace Loader {
+namespace AssetLoader {
 
 enum class LightType {
 	Directional,
@@ -62,8 +62,8 @@ struct Scene {
 	std::vector<Light> lights;
 };
 
-Scene loadGltf(const std::filesystem::path &path);
+Scene loadGltf(const std::filesystem::path &file);
 
-} // namespace Loader
+} // namespace AssetLoader
 
-#endif // !LOADER_H
+#endif // !ASSET_LOADER_H

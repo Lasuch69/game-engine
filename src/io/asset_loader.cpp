@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <variant>
 #include <vector>
 
@@ -18,58 +19,49 @@
 
 #include <SDL3/SDL_log.h>
 
+#include "asset_loader.h"
 #include "image_loader.h"
-#include "loader.h"
 
-// needed for candela to lumen conversion
-const float STERADIAN = glm::pi<float>() * 4.0f;
+const float CANDELA_TO_LUMEN = 12.5663706144; // PI * 4
 
-using namespace Loader;
+using namespace AssetLoader;
 
-glm::mat4 _getTransformMatrix(const fastgltf::Node &node) {
-	/** Both a matrix and TRS values are not allowed
-	 * to exist at the same time according to the spec */
-	if (const auto *pMatrix = std::get_if<fastgltf::Node::TransformMatrix>(&node.transform)) {
+glm::mat4 _extractTransform(const fastgltf::Node &node, const glm::mat4 &base = glm::mat4(1.0f)) {
+	if (const fastgltf::Node::TransformMatrix *pMatrix =
+					std::get_if<fastgltf::Node::TransformMatrix>(&node.transform))
 		return glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
+
+	if (const fastgltf::TRS *pTransform = std::get_if<fastgltf::TRS>(&node.transform)) {
+		glm::vec3 translation = glm::make_vec3(pTransform->translation.data());
+		glm::quat rotation = glm::make_quat(pTransform->rotation.data());
+		glm::vec3 scale = glm::make_vec3(pTransform->scale.data());
+
+		return glm::translate(base, translation) * glm::toMat4(rotation) * glm::scale(base, scale);
 	}
 
-	if (const auto *pTransform = std::get_if<fastgltf::TRS>(&node.transform)) {
-		// Warning: The quaternion to mat4x4 conversion here is not correct with all versions of
-		// glm. glTF provides the quaternion as (x, y, z, w), which is the same layout glm used up
-		// to version 0.9.9.8. However, with commit 59ddeb7 (May 2021) the default order was changed
-		// to (w, x, y, z). You could either define GLM_FORCE_QUAT_DATA_XYZW to return to the old
-		// layout, or you could use the recently added static factory constructor glm::quat::wxyz(w,
-		// x, y, z), which guarantees the parameter order.
-		return glm::translate(glm::mat4(1.0f), glm::make_vec3(pTransform->translation.data())) *
-			   glm::toMat4(glm::make_quat(pTransform->rotation.data())) *
-			   glm::scale(glm::mat4(1.0f), glm::make_vec3(pTransform->scale.data()));
-	}
-
-	return glm::mat4(1.0f);
+	return base;
 }
 
-Image *_loadImage(
-		fastgltf::Asset &asset, const std::filesystem::path &rootPath, fastgltf::Image &image) {
-	fastgltf::sources::URI *pFile = std::get_if<fastgltf::sources::URI>(&image.data);
+std::shared_ptr<Image> _loadImage(const fastgltf::Asset &asset, const fastgltf::Image &image,
+		const std::filesystem::path &directory) {
+	const fastgltf::sources::URI *pFile = std::get_if<fastgltf::sources::URI>(&image.data);
 
 	if (pFile != nullptr) {
 		assert(pFile->fileByteOffset == 0); // We don't support offsets with stbi.
 
-		std::filesystem::path path(rootPath / pFile->uri.path().data());
+		std::filesystem::path path(directory / pFile->uri.path().data());
 		assert(path.is_absolute());
 
-		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from path %s", path.c_str());
-		return ImageLoader::loadFromFile(path);
+		return ImageLoader::loadFromFile(path.c_str());
 	}
 
-	fastgltf::sources::Vector *pVector = std::get_if<fastgltf::sources::Vector>(&image.data);
+	const fastgltf::sources::Vector *pVector = std::get_if<fastgltf::sources::Vector>(&image.data);
 
-	if (pVector != nullptr) {
-		SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from memory");
-		return ImageLoader::loadFromMemory(pVector->bytes);
-	}
+	if (pVector != nullptr)
+		return ImageLoader::loadFromMemory(pVector->bytes.data(), pVector->bytes.size());
 
-	fastgltf::sources::BufferView *pView = std::get_if<fastgltf::sources::BufferView>(&image.data);
+	const fastgltf::sources::BufferView *pView =
+			std::get_if<fastgltf::sources::BufferView>(&image.data);
 
 	if (pView != nullptr) {
 		const fastgltf::BufferView &bufferView = asset.bufferViews[pView->bufferViewIndex];
@@ -78,10 +70,8 @@ Image *_loadImage(
 		const fastgltf::sources::Vector *pVector =
 				std::get_if<fastgltf::sources::Vector>(&buffer.data);
 
-		if (pVector != nullptr) {
-			SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Loading image from memory");
-			return ImageLoader::loadFromMemory(pVector->bytes);
-		}
+		if (pVector != nullptr)
+			return ImageLoader::loadFromMemory(pVector->bytes.data(), pVector->bytes.size());
 	}
 
 	return nullptr;
@@ -229,17 +219,17 @@ Mesh _loadMesh(fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
 	};
 }
 
-Scene Loader::loadGltf(const std::filesystem::path &path) {
+Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	fastgltf::GltfDataBuffer data;
-	data.loadFromFile(path);
+	data.loadFromFile(file);
 
 	fastgltf::Options options = fastgltf::Options::LoadExternalBuffers |
 								fastgltf::Options::LoadGLBBuffers |
 								fastgltf::Options::GenerateMeshIndices;
 
-	std::filesystem::path assetRoot = path.parent_path();
+	std::filesystem::path assetRoot = file.parent_path();
 	fastgltf::Expected<fastgltf::Asset> result = parser.loadGltf(&data, assetRoot, options);
 
 	if (fastgltf::Error err = result.error(); err != fastgltf::Error::None) {
@@ -259,8 +249,8 @@ Scene Loader::loadGltf(const std::filesystem::path &path) {
 		const std::optional<fastgltf::TextureInfo> &albedoInfo = material.pbrData.baseColorTexture;
 
 		if (albedoInfo.has_value()) {
-			fastgltf::Image &image = asset.images[albedoInfo->textureIndex];
-			std::shared_ptr<Image> _albedoImage(_loadImage(asset, assetRoot, image));
+			const fastgltf::Image &image = asset.images[albedoInfo->textureIndex];
+			std::shared_ptr<Image> _albedoImage(_loadImage(asset, image, file.parent_path()));
 
 			if (_albedoImage != nullptr) {
 				std::shared_ptr<Image> albedoMap(_albedoImage->getColorMap());
@@ -274,8 +264,8 @@ Scene Loader::loadGltf(const std::filesystem::path &path) {
 		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = material.normalTexture;
 
 		if (normalInfo.has_value()) {
-			fastgltf::Image &image = asset.images[normalInfo->textureIndex];
-			std::shared_ptr<Image> _normalImage(_loadImage(asset, assetRoot, image));
+			const fastgltf::Image &image = asset.images[normalInfo->textureIndex];
+			std::shared_ptr<Image> _normalImage(_loadImage(asset, image, file.parent_path()));
 
 			if (_normalImage != nullptr) {
 				std::shared_ptr<Image> normalMap(_normalImage->getNormalMap());
@@ -290,8 +280,9 @@ Scene Loader::loadGltf(const std::filesystem::path &path) {
 				material.pbrData.metallicRoughnessTexture;
 
 		if (metallicRoughnessInfo.has_value()) {
-			fastgltf::Image &image = asset.images[metallicRoughnessInfo->textureIndex];
-			std::shared_ptr<Image> _metallicRoughnessimage(_loadImage(asset, assetRoot, image));
+			const fastgltf::Image &image = asset.images[metallicRoughnessInfo->textureIndex];
+			std::shared_ptr<Image> _metallicRoughnessimage(
+					_loadImage(asset, image, file.parent_path()));
 
 			if (_metallicRoughnessimage != nullptr) {
 				{
@@ -327,7 +318,7 @@ Scene Loader::loadGltf(const std::filesystem::path &path) {
 	}
 
 	for (const fastgltf::Node &node : asset.nodes) {
-		glm::mat4 transform = _getTransformMatrix(node);
+		glm::mat4 transform = _extractTransform(node);
 		std::string name = node.name.c_str();
 
 		const fastgltf::Optional<size_t> &meshIndex = node.meshIndex;
@@ -355,7 +346,7 @@ Scene Loader::loadGltf(const std::filesystem::path &path) {
 				if (light.range.has_value())
 					range = light.range.value();
 
-				intensity *= STERADIAN / 1000.0f;
+				intensity *= CANDELA_TO_LUMEN / 1000.0f;
 				lightType = LightType::Point;
 			} else if (light.type == fastgltf::LightType::Directional) {
 				lightType = LightType::Directional;

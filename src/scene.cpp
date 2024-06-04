@@ -4,13 +4,13 @@
 
 #include "rendering/rendering_server.h"
 
-#include "loader.h"
+#include "io/asset_loader.h"
 #include "scene.h"
 
 bool Scene::load(const std::filesystem::path &path) {
-	Loader::Scene scene = Loader::loadGltf(path);
+	AssetLoader::Scene scene = AssetLoader::loadGltf(path);
 
-	for (const Loader::Material &sceneMaterial : scene.materials) {
+	for (const AssetLoader::Material &sceneMaterial : scene.materials) {
 		RS::MaterialInfo info;
 
 		std::optional<size_t> albedoIndex = sceneMaterial.albedoIndex;
@@ -57,9 +57,9 @@ bool Scene::load(const std::filesystem::path &path) {
 		_materials.push_back(material);
 	}
 
-	for (const Loader::Mesh &sceneMesh : scene.meshes) {
+	for (const AssetLoader::Mesh &sceneMesh : scene.meshes) {
 		std::vector<RS::Primitive> primitives;
-		for (const Loader::Primitive &meshPrimitive : sceneMesh.primitives) {
+		for (const AssetLoader::Primitive &meshPrimitive : sceneMesh.primitives) {
 			uint64_t materialIndex = meshPrimitive.materialIndex;
 			ObjectID material = _materials[materialIndex];
 
@@ -75,7 +75,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		_meshes.push_back(mesh);
 	}
 
-	for (const Loader::MeshInstance &sceneMeshInstance : scene.meshInstances) {
+	for (const AssetLoader::MeshInstance &sceneMeshInstance : scene.meshInstances) {
 		uint64_t meshIndex = sceneMeshInstance.meshIndex;
 
 		ObjectID mesh = _meshes[meshIndex];
@@ -88,7 +88,7 @@ bool Scene::load(const std::filesystem::path &path) {
 		_meshInstances.push_back(meshInstance);
 	}
 
-	for (const Loader::Light &sceneLight : scene.lights) {
+	for (const AssetLoader::Light &sceneLight : scene.lights) {
 		glm::mat4 transform = sceneLight.transform;
 		float range = sceneLight.range.value_or(0.0f);
 		glm::vec3 color = sceneLight.color;
@@ -97,10 +97,10 @@ bool Scene::load(const std::filesystem::path &path) {
 		ObjectID light;
 
 		switch (sceneLight.type) {
-			case Loader::LightType::Directional:
+			case AssetLoader::LightType::Directional:
 				light = RS::getSingleton().lightCreate(LightType::Directional);
 				break;
-			case Loader::LightType::Point:
+			case AssetLoader::LightType::Point:
 				light = RS::getSingleton().lightCreate(LightType::Point);
 				break;
 		}

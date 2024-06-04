@@ -16,7 +16,7 @@
 
 #include "effects/environment_effects.h"
 
-#include "../image.h"
+#include "../io/image.h"
 
 #include "rendering_device.h"
 

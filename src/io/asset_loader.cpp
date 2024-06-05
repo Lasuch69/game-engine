@@ -238,10 +238,10 @@ Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 
 		if (albedoInfo.has_value()) {
 			const fastgltf::Image &image = asset.images[albedoInfo->textureIndex];
-			std::shared_ptr<Image> _albedoImage(_loadImage(asset, image, file.parent_path()));
+			std::shared_ptr<Image> albedoMap(_loadImage(asset, image, file.parent_path()));
 
-			if (_albedoImage != nullptr) {
-				std::shared_ptr<Image> albedoMap(_albedoImage->getColorMap());
+			if (albedoMap != nullptr) {
+				albedoMap->convert(Image::Format::RGBA8);
 
 				uint32_t idx = scene.images.size();
 				scene.images.push_back(albedoMap);
@@ -253,10 +253,10 @@ Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 
 		if (normalInfo.has_value()) {
 			const fastgltf::Image &image = asset.images[normalInfo->textureIndex];
-			std::shared_ptr<Image> _normalImage(_loadImage(asset, image, file.parent_path()));
+			std::shared_ptr<Image> normalMap(_loadImage(asset, image, file.parent_path()));
 
-			if (_normalImage != nullptr) {
-				std::shared_ptr<Image> normalMap(_normalImage->getNormalMap());
+			if (normalMap != nullptr) {
+				normalMap->convert(Image::Format::RG8);
 
 				uint32_t idx = scene.images.size();
 				scene.images.push_back(normalMap);
@@ -276,7 +276,7 @@ Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 				{
 					// metallic in blue channel
 					std::shared_ptr<Image> metallicMap(
-							_metallicRoughnessimage->getMetallicMap(Image::Channel::B));
+							_metallicRoughnessimage->getComponent(Image::Channel::B));
 
 					uint32_t idx = scene.images.size();
 					scene.images.push_back(metallicMap);
@@ -287,7 +287,7 @@ Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 				{
 					// roughness in green channel
 					std::shared_ptr<Image> roughnessMap(
-							_metallicRoughnessimage->getRoughnessMap(Image::Channel::G));
+							_metallicRoughnessimage->getComponent(Image::Channel::G));
 
 					uint32_t idx = scene.images.size();
 					scene.images.push_back(roughnessMap);

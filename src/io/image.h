@@ -26,23 +26,13 @@ private:
 	Format _format = Format::R8;
 	std::vector<uint8_t> _data = {};
 
-	struct Color {
-		uint8_t r, g, b = 0;
-		uint8_t a = 255;
-	};
-
-	Color _getPixelAtOffset(size_t offset) const;
-	void _setPixelAtOffset(size_t offset, const Color &color);
-
 public:
 	static uint32_t getFormatByteSize(const Format &format);
 	static uint32_t getFormatChannelCount(const Format &format);
 	static const char *getFormatName(const Format &format);
 
-	Image *getColorMap() const;
-	Image *getNormalMap() const;
-	Image *getMetallicMap(Channel channel) const;
-	Image *getRoughnessMap(Channel channel) const;
+	void convert(const Format &format);
+	Image *getComponent(const Channel &channel) const;
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;

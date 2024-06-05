@@ -3,60 +3,84 @@
 
 #include "image.h"
 
-Image::Color Image::_getPixelAtOffset(size_t offset) const {
-	uint32_t i = offset * getFormatByteSize(_format);
+typedef struct {
+	float r, g, b, a;
+} Color;
+
+static Color _getPixel(const uint8_t *pBytes, const Image::Format &format, uint32_t idx) {
+	uint32_t ofs = idx * Image::getFormatChannelCount(format);
 
 	Color color = {};
+	switch (format) {
+		case Image::Format::R8:
+			color.r = pBytes[ofs + 0] / 255.0;
+			color.g = pBytes[ofs + 0] / 255.0;
+			color.b = pBytes[ofs + 0] / 255.0;
+			color.a = 1.0;
+			break;
+		case Image::Format::RG8:
+			color.r = pBytes[ofs + 0] / 255.0;
+			color.g = pBytes[ofs + 1] / 255.0;
+			color.b = 0.0;
+			color.a = 1.0;
+			break;
+		case Image::Format::RGB8:
+			color.r = pBytes[ofs + 0] / 255.0;
+			color.g = pBytes[ofs + 1] / 255.0;
+			color.b = pBytes[ofs + 2] / 255.0;
+			color.a = 1.0;
+			break;
+		case Image::Format::RGBA8:
+			color.r = pBytes[ofs + 0] / 255.0;
+			color.g = pBytes[ofs + 1] / 255.0;
+			color.b = pBytes[ofs + 2] / 255.0;
+			color.a = pBytes[ofs + 3] / 255.0;
+			break;
+		case Image::Format::RGBA32F:
+			// uint8_t to float
+			const float *pData = reinterpret_cast<const float *>(pBytes);
 
-	switch (_format) {
-		case Format::R8:
-			color.r = _data[i + 0];
-			break;
-		case Format::RG8:
-			color.r = _data[i + 0];
-			color.g = _data[i + 1];
-			break;
-		case Format::RGB8:
-			color.r = _data[i + 0];
-			color.g = _data[i + 1];
-			color.b = _data[i + 2];
-			break;
-		case Format::RGBA8:
-			color.r = _data[i + 0];
-			color.g = _data[i + 1];
-			color.b = _data[i + 2];
-			color.a = _data[i + 3];
-			break;
-		default:
+			color.r = pData[ofs + 0];
+			color.g = pData[ofs + 1];
+			color.b = pData[ofs + 2];
+			color.a = pData[ofs + 3];
 			break;
 	}
 
 	return color;
 }
 
-void Image::_setPixelAtOffset(size_t offset, const Color &color) {
-	uint32_t i = offset * getFormatByteSize(_format);
+static void _setPixel(
+		uint8_t *pBytes, const Image::Format &format, uint32_t idx, const Color &color) {
+	uint32_t ofs = idx * Image::getFormatChannelCount(format);
 
-	switch (_format) {
-		case Format::R8:
-			_data[i + 0] = color.r;
+	switch (format) {
+		case Image::Format::R8:
+			pBytes[ofs + 0] = color.r * 255;
 			break;
-		case Format::RG8:
-			_data[i + 0] = color.r;
-			_data[i + 1] = color.g;
+		case Image::Format::RG8:
+			pBytes[ofs + 0] = color.r * 255;
+			pBytes[ofs + 1] = color.g * 255;
 			break;
-		case Format::RGB8:
-			_data[i + 0] = color.r;
-			_data[i + 1] = color.g;
-			_data[i + 2] = color.b;
+		case Image::Format::RGB8:
+			pBytes[ofs + 0] = color.r * 255;
+			pBytes[ofs + 1] = color.g * 255;
+			pBytes[ofs + 2] = color.b * 255;
 			break;
-		case Format::RGBA8:
-			_data[i + 0] = color.r;
-			_data[i + 1] = color.g;
-			_data[i + 2] = color.b;
-			_data[i + 3] = color.a;
+		case Image::Format::RGBA8:
+			pBytes[ofs + 0] = color.r * 255;
+			pBytes[ofs + 1] = color.g * 255;
+			pBytes[ofs + 2] = color.b * 255;
+			pBytes[ofs + 3] = color.a * 255;
 			break;
-		default:
+		case Image::Format::RGBA32F:
+			// uint8_t to float
+			float *pData = reinterpret_cast<float *>(pBytes);
+
+			pData[ofs + 0] = color.r;
+			pData[ofs + 1] = color.g;
+			pData[ofs + 2] = color.b;
+			pData[ofs + 3] = color.a;
 			break;
 	}
 }
@@ -111,116 +135,62 @@ const char *Image::getFormatName(const Format &format) {
 	return "";
 }
 
-Image *Image::getColorMap() const {
-	if (_format == Image::Format::RGBA32F)
-		return nullptr;
+void Image::convert(const Format &format) {
+	uint32_t pixelCount = _width * _height;
+	uint32_t byteSize = getFormatByteSize(format);
 
-	Format format = Format::RGBA8;
-	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatByteSize(format);
+	std::vector<uint8_t> data(pixelCount * byteSize);
 
-	std::vector<uint8_t> newData(pixelCount * pixelSize);
-	Image *pColorMap = new Image(_width, _height, format, newData);
+	uint8_t *pSrcData = _data.data();
+	Format srcFormat = _format;
 
-	for (size_t offset = 0; offset < pixelCount; offset++) {
-		Color src = _getPixelAtOffset(offset);
-		pColorMap->_setPixelAtOffset(offset, src);
+	uint8_t *pDstData = data.data();
+	Format dstFormat = format;
+
+	for (uint32_t pixelIdx = 0; pixelIdx < pixelCount; pixelIdx++) {
+		Color color = _getPixel(pSrcData, srcFormat, pixelIdx);
+		_setPixel(pDstData, dstFormat, pixelIdx, color);
 	}
 
-	return pColorMap;
+	_format = format;
+	_data = data;
 }
 
-Image *Image::getNormalMap() const {
-	if (_format == Image::Format::RGBA32F)
-		return nullptr;
+Image *Image::getComponent(const Channel &channel) const {
+	uint32_t pixelCount = _width * _height;
 
-	Format format = Format::RG8;
-	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatByteSize(format);
+	std::vector<uint8_t> data(pixelCount);
 
-	std::vector<uint8_t> newData(pixelCount * pixelSize);
-	Image *pNormalMap = new Image(_width, _height, format, newData);
+	const uint8_t *pSrcData = _data.data();
+	Format srcFormat = _format;
 
-	for (size_t offset = 0; offset < pixelCount; offset++) {
-		Color src = _getPixelAtOffset(offset);
-		pNormalMap->_setPixelAtOffset(offset, src);
-	}
+	uint8_t *pDstData = data.data();
+	Format dstFormat = Format::R8;
 
-	return pNormalMap;
-}
-
-Image *Image::getMetallicMap(Channel channel) const {
-	if (_format == Image::Format::RGBA32F)
-		return nullptr;
-
-	Format format = Format::R8;
-	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatByteSize(format);
-
-	std::vector<uint8_t> newData(pixelCount * pixelSize);
-	Image *pMetallicMap = new Image(_width, _height, format, newData);
-
-	for (size_t offset = 0; offset < pixelCount; offset++) {
-		Color src = _getPixelAtOffset(offset);
-		Color dst;
+	for (size_t pixelIdx = 0; pixelIdx < pixelCount; pixelIdx++) {
+		Color src = _getPixel(pSrcData, srcFormat, pixelIdx);
+		Color color = {};
 
 		// swizzle
 		switch (channel) {
 			case Channel::R:
-				dst.r = src.r;
+				color.r = src.r;
 				break;
 			case Channel::G:
-				dst.r = src.g;
+				color.r = src.g;
 				break;
 			case Channel::B:
-				dst.r = src.b;
+				color.r = src.b;
 				break;
 			case Channel::A:
-				dst.r = src.a;
+				color.r = src.a;
 				break;
 		}
 
-		pMetallicMap->_setPixelAtOffset(offset, dst);
+		_setPixel(pDstData, dstFormat, pixelIdx, color);
 	}
 
-	return pMetallicMap;
-}
-
-Image *Image::getRoughnessMap(Channel channel) const {
-	if (_format == Image::Format::RGBA32F)
-		return nullptr;
-
-	Format format = Format::R8;
-	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatByteSize(format);
-
-	std::vector<uint8_t> newData(pixelCount * pixelSize);
-	Image *pRoughnessMap = new Image(_width, _height, format, newData);
-
-	for (size_t offset = 0; offset < pixelCount; offset++) {
-		Color src = _getPixelAtOffset(offset);
-		Color dst;
-
-		// swizzle
-		switch (channel) {
-			case Channel::R:
-				dst.r = src.r;
-				break;
-			case Channel::G:
-				dst.r = src.g;
-				break;
-			case Channel::B:
-				dst.r = src.b;
-				break;
-			case Channel::A:
-				dst.r = src.a;
-				break;
-		}
-
-		pRoughnessMap->_setPixelAtOffset(offset, dst);
-	}
-
-	return pRoughnessMap;
+	return new Image(_width, _height, Format::R8, data);
 }
 
 uint32_t Image::getWidth() const {

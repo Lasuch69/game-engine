@@ -454,12 +454,10 @@ void RD::imageViewDestroy(vk::ImageView imageView) {
 	_pContext->getDevice().destroyImageView(imageView);
 }
 
-vk::Sampler RD::samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias) {
+vk::Sampler RD::samplerCreate(vk::Filter filter, vk::SamplerAddressMode repeatMode,
+		uint32_t mipLevels, float mipLodBias) {
 	vk::PhysicalDeviceProperties properties = _pContext->getPhysicalDevice().getProperties();
 	float maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-
-	vk::SamplerMipmapMode mipmapMode = vk::SamplerMipmapMode::eLinear;
-	vk::SamplerAddressMode repeatMode = vk::SamplerAddressMode::eClampToEdge;
 
 	vk::SamplerCreateInfo createInfo;
 	createInfo.setMagFilter(filter);
@@ -473,7 +471,7 @@ vk::Sampler RD::samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLo
 	createInfo.setUnnormalizedCoordinates(false);
 	createInfo.setCompareEnable(false);
 	createInfo.setCompareOp(vk::CompareOp::eAlways);
-	createInfo.setMipmapMode(mipmapMode);
+	createInfo.setMipmapMode(vk::SamplerMipmapMode::eLinear);
 	createInfo.setMinLod(0.0f);
 	createInfo.setMaxLod(static_cast<float>(mipLevels));
 	createInfo.setMipLodBias(mipLodBias);
@@ -515,7 +513,8 @@ TextureRD RD::textureCreate(std::shared_ptr<Image> image) {
 	imageGenerateMipmaps(allocatedImage.image, width, height, format, mipLevels);
 
 	vk::ImageView imageView = imageViewCreate(allocatedImage.image, format, mipLevels);
-	vk::Sampler sampler = samplerCreate(vk::Filter::eLinear, mipLevels);
+	vk::Sampler sampler =
+			samplerCreate(vk::Filter::eLinear, vk::SamplerAddressMode::eRepeat, mipLevels);
 
 	return {
 		allocatedImage,
@@ -555,17 +554,20 @@ void RD::environmentSkyUpdate(const std::shared_ptr<Image> image) {
 	vk::ImageView cubemapView =
 			imageViewCreate(cubemap.image, format, mipLevels, 6, vk::ImageViewType::eCube);
 
-	vk::Sampler cubemapSampler = samplerCreate(vk::Filter::eLinear, mipLevels);
+	vk::Sampler cubemapSampler =
+			samplerCreate(vk::Filter::eLinear, vk::SamplerAddressMode::eClampToEdge, mipLevels);
 
 	AllocatedImage irradiance = _environmentEffects.filterIrradiance(cubemapView);
 	vk::ImageView irradianceView =
 			imageViewCreate(irradiance.image, format, 1, 6, vk::ImageViewType::eCube);
-	vk::Sampler irradianceSampler = samplerCreate(vk::Filter::eLinear, 1);
+	vk::Sampler irradianceSampler =
+			samplerCreate(vk::Filter::eLinear, vk::SamplerAddressMode::eClampToEdge, 1);
 
 	AllocatedImage specular = _environmentEffects.filterSpecular(cubemapView, size, mipLevels);
 	vk::ImageView specularView =
 			imageViewCreate(specular.image, format, 5, 6, vk::ImageViewType::eCube);
-	vk::Sampler specularSampler = samplerCreate(vk::Filter::eLinear, 5);
+	vk::Sampler specularSampler =
+			samplerCreate(vk::Filter::eLinear, vk::SamplerAddressMode::eClampToEdge, 5);
 
 	{
 		vk::DescriptorImageInfo imageInfo;
@@ -1229,7 +1231,7 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 
 		_brdfLut = _environmentEffects.generateBRDF();
 		_brdfView = imageViewCreate(_brdfLut.image, vk::Format::eR16G16Sfloat, 1);
-		_brdfSampler = samplerCreate(vk::Filter::eLinear, 1);
+		_brdfSampler = samplerCreate(vk::Filter::eLinear, vk::SamplerAddressMode::eClampToEdge, 1);
 
 		vk::DescriptorImageInfo imageInfo;
 		imageInfo.setImageView(_brdfView);

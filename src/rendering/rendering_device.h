@@ -152,7 +152,8 @@ public:
 			uint32_t arrayLayers = 1, vk::ImageViewType viewType = vk::ImageViewType::e2D);
 	void imageViewDestroy(vk::ImageView imageView);
 
-	vk::Sampler samplerCreate(vk::Filter filter, uint32_t mipLevels, float mipLodBias = 0.0f);
+	vk::Sampler samplerCreate(vk::Filter filter, vk::SamplerAddressMode repeatMode,
+			uint32_t mipLevels, float mipLodBias = 0.0f);
 	void samplerDestroy(vk::Sampler sampler);
 
 	TextureRD textureCreate(const std::shared_ptr<Image> image);

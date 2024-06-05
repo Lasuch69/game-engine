@@ -1,8 +1,5 @@
 #include <cstdint>
-#include <stdexcept>
 #include <vector>
-
-#include <SDL3/SDL_log.h>
 
 #include "image.h"
 
@@ -31,7 +28,7 @@ Image::Color Image::_getPixelAtOffset(size_t offset) const {
 			color.a = _data[i + 3];
 			break;
 		default:
-			throw std::runtime_error("Unsupported image format!");
+			break;
 	}
 
 	return color;
@@ -60,7 +57,7 @@ void Image::_setPixelAtOffset(size_t offset, const Color &color) {
 			_data[i + 3] = color.a;
 			break;
 		default:
-			throw std::runtime_error("Unsupported image format!");
+			break;
 	}
 }
 
@@ -115,10 +112,8 @@ const char *Image::getFormatName(const Format &format) {
 }
 
 Image *Image::getColorMap() const {
-	if (_format == Image::Format::RGBA32F) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for color mapping!");
+	if (_format == Image::Format::RGBA32F)
 		return nullptr;
-	}
 
 	Format format = Format::RGBA8;
 	size_t pixelCount = _width * _height;
@@ -136,10 +131,8 @@ Image *Image::getColorMap() const {
 }
 
 Image *Image::getNormalMap() const {
-	if (_format == Image::Format::RGBA32F) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for normal mapping!");
+	if (_format == Image::Format::RGBA32F)
 		return nullptr;
-	}
 
 	Format format = Format::RG8;
 	size_t pixelCount = _width * _height;
@@ -157,11 +150,8 @@ Image *Image::getNormalMap() const {
 }
 
 Image *Image::getMetallicMap(Channel channel) const {
-	if (_format == Image::Format::RGBA32F) {
-		SDL_LogError(
-				SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for metallic mapping!");
+	if (_format == Image::Format::RGBA32F)
 		return nullptr;
-	}
 
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
@@ -197,11 +187,8 @@ Image *Image::getMetallicMap(Channel channel) const {
 }
 
 Image *Image::getRoughnessMap(Channel channel) const {
-	if (_format == Image::Format::RGBA32F) {
-		SDL_LogError(
-				SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for roughness mapping!");
+	if (_format == Image::Format::RGBA32F)
 		return nullptr;
-	}
 
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;

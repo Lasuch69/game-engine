@@ -35,6 +35,10 @@ private:
 	void _setPixelAtOffset(size_t offset, const Color &color);
 
 public:
+	static uint32_t getFormatByteSize(const Format &format);
+	static uint32_t getFormatChannelCount(const Format &format);
+	static const char *getFormatName(const Format &format);
+
 	Image *getColorMap() const;
 	Image *getNormalMap() const;
 	Image *getMetallicMap(Channel channel) const;
@@ -42,10 +46,7 @@ public:
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;
-
 	Format getFormat() const;
-	uint32_t getPixelSize() const;
-
 	std::vector<uint8_t> getData() const;
 
 	Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data);

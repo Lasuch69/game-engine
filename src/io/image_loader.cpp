@@ -33,29 +33,11 @@ void ImageLoader::_printInfo(const Image *pImage, const char *pFile) {
 		SDL_Log("Loaded image from path: %s", pFile);
 	}
 
-	const char *pFormat = "";
-
-	switch (pImage->getFormat()) {
-		case Image::Format::R8:
-			pFormat = "R8";
-			break;
-		case Image::Format::RG8:
-			pFormat = "RG8";
-			break;
-		case Image::Format::RGB8:
-			pFormat = "RGB8";
-			break;
-		case Image::Format::RGBA8:
-			pFormat = "RGBA8";
-			break;
-		case Image::Format::RGBA32F:
-			pFormat = "RGBA32F";
-			break;
-	}
+	Image::Format format = pImage->getFormat();
 
 	SDL_LogVerbose(CATEGORY, "Width: %d", pImage->getWidth());
 	SDL_LogVerbose(CATEGORY, "Height: %d", pImage->getHeight());
-	SDL_LogVerbose(CATEGORY, "Format: %s", pFormat);
+	SDL_LogVerbose(CATEGORY, "Format: %s", Image::getFormatName(format));
 	SDL_LogVerbose(CATEGORY, "Bytes: %ld", pImage->getData().size());
 }
 

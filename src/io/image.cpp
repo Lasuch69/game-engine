@@ -6,25 +6,8 @@
 
 #include "image.h"
 
-static uint32_t getFormatPixelSize(Image::Format format) {
-	switch (format) {
-		case Image::Format::R8:
-			return 1;
-		case Image::Format::RG8:
-			return 2;
-		case Image::Format::RGB8:
-			return 3;
-		case Image::Format::RGBA8:
-			return 4;
-		case Image::Format::RGBA32F:
-			return 16;
-	}
-
-	return 1;
-}
-
 Image::Color Image::_getPixelAtOffset(size_t offset) const {
-	uint32_t i = offset * getPixelSize();
+	uint32_t i = offset * getFormatByteSize(_format);
 
 	Color color = {};
 
@@ -55,7 +38,7 @@ Image::Color Image::_getPixelAtOffset(size_t offset) const {
 }
 
 void Image::_setPixelAtOffset(size_t offset, const Color &color) {
-	uint32_t i = offset * getPixelSize();
+	uint32_t i = offset * getFormatByteSize(_format);
 
 	switch (_format) {
 		case Format::R8:
@@ -81,6 +64,56 @@ void Image::_setPixelAtOffset(size_t offset, const Color &color) {
 	}
 }
 
+uint32_t Image::getFormatByteSize(const Format &format) {
+	switch (format) {
+		case Image::Format::R8:
+			return 1;
+		case Image::Format::RG8:
+			return 2;
+		case Image::Format::RGB8:
+			return 3;
+		case Image::Format::RGBA8:
+			return 4;
+		case Image::Format::RGBA32F:
+			return 16;
+	}
+
+	return 0;
+}
+
+uint32_t Image::getFormatChannelCount(const Format &format) {
+	switch (format) {
+		case Image::Format::R8:
+			return 1;
+		case Image::Format::RG8:
+			return 2;
+		case Image::Format::RGB8:
+			return 3;
+		case Image::Format::RGBA8:
+		case Image::Format::RGBA32F:
+			return 4;
+	}
+
+	return 0;
+}
+
+const char *Image::getFormatName(const Format &format) {
+	switch (format) {
+		case Image::Format::R8:
+			return "R8";
+		case Image::Format::RG8:
+			return "RG8";
+		case Image::Format::RGB8:
+			return "RGB8";
+		case Image::Format::RGBA8:
+			return "RGBA8";
+		case Image::Format::RGBA32F:
+			return "RGBA32F";
+	}
+
+	return "";
+}
+
 Image *Image::getColorMap() const {
 	if (_format == Image::Format::RGBA32F) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "RGBA32F is not suitable format for color mapping!");
@@ -89,7 +122,7 @@ Image *Image::getColorMap() const {
 
 	Format format = Format::RGBA8;
 	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatPixelSize(format);
+	uint32_t pixelSize = getFormatByteSize(format);
 
 	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pColorMap = new Image(_width, _height, format, newData);
@@ -110,7 +143,7 @@ Image *Image::getNormalMap() const {
 
 	Format format = Format::RG8;
 	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatPixelSize(format);
+	uint32_t pixelSize = getFormatByteSize(format);
 
 	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pNormalMap = new Image(_width, _height, format, newData);
@@ -132,7 +165,7 @@ Image *Image::getMetallicMap(Channel channel) const {
 
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatPixelSize(format);
+	uint32_t pixelSize = getFormatByteSize(format);
 
 	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pMetallicMap = new Image(_width, _height, format, newData);
@@ -172,7 +205,7 @@ Image *Image::getRoughnessMap(Channel channel) const {
 
 	Format format = Format::R8;
 	size_t pixelCount = _width * _height;
-	uint32_t pixelSize = getFormatPixelSize(format);
+	uint32_t pixelSize = getFormatByteSize(format);
 
 	std::vector<uint8_t> newData(pixelCount * pixelSize);
 	Image *pRoughnessMap = new Image(_width, _height, format, newData);
@@ -217,10 +250,6 @@ Image::Format Image::getFormat() const {
 
 std::vector<uint8_t> Image::getData() const {
 	return _data;
-}
-
-uint32_t Image::getPixelSize() const {
-	return getFormatPixelSize(_format);
 }
 
 Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {

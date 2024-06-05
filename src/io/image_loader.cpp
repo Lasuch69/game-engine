@@ -39,14 +39,8 @@ void ImageLoader::_printInfo(const Image *pImage, const char *pFile) {
 		case Image::Format::R8:
 			pFormat = "R8";
 			break;
-		case Image::Format::L8:
-			pFormat = "L8";
-			break;
 		case Image::Format::RG8:
 			pFormat = "RG8";
-			break;
-		case Image::Format::LA8:
-			pFormat = "LA8";
 			break;
 		case Image::Format::RGB8:
 			pFormat = "RGB8";

@@ -8,9 +8,7 @@ class Image {
 public:
 	enum class Format {
 		R8,
-		L8,
 		RG8,
-		LA8,
 		RGB8,
 		RGBA8,
 		RGBA32F,
@@ -25,7 +23,7 @@ public:
 
 private:
 	uint32_t _width, _height;
-	Format _format = Format::L8;
+	Format _format = Format::R8;
 	std::vector<uint8_t> _data = {};
 
 	struct Color {

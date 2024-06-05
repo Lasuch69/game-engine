@@ -23,10 +23,8 @@
 static vk::Format getVkFormat(Image::Format format) {
 	switch (format) {
 		case Image::Format::R8:
-		case Image::Format::L8:
 			return vk::Format::eR8Unorm;
 		case Image::Format::RG8:
-		case Image::Format::LA8:
 			return vk::Format::eR8G8Unorm;
 		case Image::Format::RGB8:
 			return vk::Format::eR8G8B8Unorm;

@@ -9,10 +9,8 @@
 static uint32_t getFormatPixelSize(Image::Format format) {
 	switch (format) {
 		case Image::Format::R8:
-		case Image::Format::L8:
 			return 1;
 		case Image::Format::RG8:
-		case Image::Format::LA8:
 			return 2;
 		case Image::Format::RGB8:
 			return 3;
@@ -32,16 +30,11 @@ Image::Color Image::_getPixelAtOffset(size_t offset) const {
 
 	switch (_format) {
 		case Format::R8:
-		case Format::L8:
 			color.r = _data[i + 0];
 			break;
 		case Format::RG8:
 			color.r = _data[i + 0];
 			color.g = _data[i + 1];
-			break;
-		case Format::LA8:
-			color.r = _data[i + 0];
-			color.a = _data[i + 1];
 			break;
 		case Format::RGB8:
 			color.r = _data[i + 0];
@@ -66,16 +59,11 @@ void Image::_setPixelAtOffset(size_t offset, const Color &color) {
 
 	switch (_format) {
 		case Format::R8:
-		case Format::L8:
 			_data[i + 0] = color.r;
 			break;
 		case Format::RG8:
 			_data[i + 0] = color.r;
 			_data[i + 1] = color.g;
-			break;
-		case Format::LA8:
-			_data[i + 0] = color.r;
-			_data[i + 1] = color.a;
 			break;
 		case Format::RGB8:
 			_data[i + 0] = color.r;

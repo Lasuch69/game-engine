@@ -26,11 +26,11 @@ set_property(TARGET SDL3 PROPERTY IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/lib/lib
 set(FASTGLTF_DIR thirdparty/fastgltf)
 
 add_library(fastgltf
-	${FASTGLTF_DIR}/src/fastgltf.cpp
-	${FASTGLTF_DIR}/src/base64.cpp
+	${FASTGLTF_DIR}/fastgltf.cpp
+	${FASTGLTF_DIR}/base64.cpp
 	${FASTGLTF_DIR}/deps/simdjson/simdjson.cpp
 )
-target_include_directories(fastgltf PRIVATE ${FASTGLTF_DIR}/deps/simdjson ${FASTGLTF_DIR}/include)
+target_include_directories(fastgltf PRIVATE ${FASTGLTF_DIR}/deps/simdjson ${FASTGLTF_DIR})
 target_compile_options(fastgltf PRIVATE -O3)
 
 # ZLib
@@ -73,10 +73,7 @@ target_include_directories(hayaku PRIVATE
 	include
 	thirdparty
 	thirdparty/SDL3/include
-	thirdparty/stb/include
-	thirdparty/vma/include
-	thirdparty/fastgltf/include
-	thirdparty/zlib
+	thirdparty/fastgltf
 )
 
 target_compile_options(hayaku PRIVATE -Wall -O2)

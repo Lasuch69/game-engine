@@ -3,16 +3,16 @@
 
 #include <cstdint>
 #include <memory>
-#include <vector>
 
 #include <glm/glm.hpp>
+
+#include <io/mesh.h>
 
 #include "object_owner.h"
 #include "storage/light_storage.h"
 
 #include "types/camera.h"
 #include "types/resource.h"
-#include "types/vertex.h"
 
 #define NULL_HANDLE 0
 
@@ -30,12 +30,6 @@ private:
 	RenderingServer() {}
 
 public:
-	struct Primitive {
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-		ObjectID material;
-	};
-
 	struct MaterialInfo {
 		ObjectID albedo;
 		ObjectID normal;
@@ -65,7 +59,7 @@ public:
 	void cameraSetZNear(float zNear);
 	void cameraSetZFar(float zFar);
 
-	ObjectID meshCreate(const std::vector<Primitive> &primitives);
+	ObjectID meshCreate(const Mesh &mesh);
 	void meshFree(ObjectID mesh);
 
 	ObjectID meshInstanceCreate();

@@ -11,6 +11,7 @@
 #include <rendering/types/vertex.h>
 
 #include "image.h"
+#include "mesh.h"
 
 namespace AssetLoader {
 
@@ -19,22 +20,11 @@ enum class LightType {
 	Point,
 };
 
-struct Primitive {
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
-	uint64_t materialIndex;
-};
-
 struct Material {
 	std::optional<uint64_t> albedoIndex;
 	std::optional<uint64_t> normalIndex;
 	std::optional<uint64_t> metallicIndex;
 	std::optional<uint64_t> roughnessIndex;
-	std::string name;
-};
-
-struct Mesh {
-	std::vector<Primitive> primitives;
 	std::string name;
 };
 

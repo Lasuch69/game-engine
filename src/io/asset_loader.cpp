@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <variant>
@@ -19,8 +20,10 @@
 
 #include <SDL3/SDL_log.h>
 
-#include "asset_loader.h"
 #include "image_loader.h"
+#include "mesh.h"
+
+#include "asset_loader.h"
 
 const float CANDELA_TO_LUMEN = 12.5663706144; // PI * 4
 
@@ -77,15 +80,16 @@ std::shared_ptr<Image> _loadImage(const fastgltf::Asset &asset, const fastgltf::
 	return nullptr;
 }
 
-void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex> &vertices) {
-	assert(indices.size() % 3 == 0);
+void _generateTangents(const IndexArray &indices, VertexArray &vertices) {
+	assert(indices.count % 3 == 0);
 
-	std::vector<float> avg(vertices.size());
+	uint32_t averageCount = vertices.count;
+	float *pAverage = (float *)calloc(averageCount, sizeof(float));
 
-	for (size_t i = 0; i < indices.size(); i += 3) {
-		Vertex &v0 = vertices[indices[i + 0]];
-		Vertex &v1 = vertices[indices[i + 1]];
-		Vertex &v2 = vertices[indices[i + 2]];
+	for (size_t i = 0; i < indices.count; i += 3) {
+		Vertex &v0 = vertices.pData[indices.pData[i + 0]];
+		Vertex &v1 = vertices.pData[indices.pData[i + 1]];
+		Vertex &v2 = vertices.pData[indices.pData[i + 2]];
 
 		glm::vec3 pos0 = v0.position;
 		glm::vec3 pos1 = v1.position;
@@ -108,114 +112,98 @@ void _generateTangents(const std::vector<uint32_t> &indices, std::vector<Vertex>
 		v1.tangent += tangent;
 		v2.tangent += tangent;
 
-		avg[indices[i + 0]] += 1.0;
-		avg[indices[i + 1]] += 1.0;
-		avg[indices[i + 2]] += 1.0;
+		pAverage[indices.pData[i + 0]] += 1.0;
+		pAverage[indices.pData[i + 1]] += 1.0;
+		pAverage[indices.pData[i + 2]] += 1.0;
 	}
 
-	for (size_t i = 0; i < avg.size(); i++) {
-		float denom = 1.0 / avg[i];
-		vertices[i].tangent *= denom;
+	for (uint32_t i = 0; i < averageCount; i++) {
+		float denom = 1.0 / pAverage[i];
+		vertices.pData[i].tangent *= denom;
 	}
 }
 
-Mesh _loadMesh(fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
-	std::vector<Primitive> primitives = {};
+Mesh _loadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
+	uint32_t primitiveCount = mesh.primitives.size();
+	Primitive *pPrimitives = (Primitive *)malloc(primitiveCount * sizeof(Primitive));
 
+	size_t idx = 0;
 	for (const fastgltf::Primitive &primitive : mesh.primitives) {
-		std::vector<uint32_t> indices = {};
-		std::vector<Vertex> vertices = {};
+		VertexArray vertices = {};
+		IndexArray indices = {};
+
+		// due to Options::GenerateMeshIndices, this should always be true
+		assert(primitive.indicesAccessor.has_value());
+		size_t accessorIndex = primitive.indicesAccessor.value();
+		const fastgltf::Accessor &indexAccessor = asset.accessors[accessorIndex];
+
+		indices.pData = (uint32_t *)malloc(indexAccessor.count * sizeof(uint32_t));
+		indices.count = indexAccessor.count;
+
+		fastgltf::iterateAccessorWithIndex<uint32_t>(asset, indexAccessor,
+				[&](uint32_t index, size_t idx) { indices.pData[idx] = index; });
 
 		{
-			// due to Options::GenerateMeshIndices, this should always be true
-			assert(primitive.indicesAccessor.has_value());
-
-			size_t accessorIndex = primitive.indicesAccessor.value();
-			auto &_indices = asset.accessors[accessorIndex];
-
-			indices.resize(_indices.count);
-
-			size_t idx = 0;
-			for (uint32_t index : fastgltf::iterateAccessor<uint32_t>(asset, _indices)) {
-				if (idx >= indices.size())
-					break;
-
-				indices[idx] = index;
-				idx++;
-			}
-		}
-
-		{
-			auto *pIter = primitive.findAttribute("POSITION");
-			fastgltf::Accessor &positions = asset.accessors[pIter->second];
+			size_t accessorIndex = primitive.findAttribute("POSITION")->second;
+			const fastgltf::Accessor &positionAccessor = asset.accessors[accessorIndex];
 
 			// required
-			if (!positions.bufferViewIndex.has_value())
+			if (!positionAccessor.bufferViewIndex.has_value())
 				continue;
 
-			vertices.resize(positions.count);
+			vertices.pData = (Vertex *)malloc(positionAccessor.count * sizeof(Vertex));
+			vertices.count = positionAccessor.count;
 
-			size_t idx = 0;
-			for (const auto &position : fastgltf::iterateAccessor<glm::vec3>(asset, positions)) {
-				if (idx >= vertices.size())
-					break;
+			fastgltf::iterateAccessorWithIndex<glm::vec3>(
+					asset, positionAccessor, [&](const glm::vec3 &position, size_t idx) {
+						vertices.pData[idx].position = position;
 
-				vertices[idx].position = position;
-				idx++;
-			}
+						// initialize tangent
+						vertices.pData[idx].tangent = glm::vec3(0.0);
+					});
 		}
 
 		for (const auto &attribute : primitive.attributes) {
 			const char *pName = attribute.first.data();
-			const size_t accessorIndex = attribute.second;
+			const fastgltf::Accessor &accessor = asset.accessors[attribute.second];
+
+			if (!accessor.bufferViewIndex.has_value())
+				continue;
 
 			if (strcmp(pName, "NORMAL") == 0) {
-				fastgltf::Accessor &normals = asset.accessors[accessorIndex];
-
-				if (!normals.bufferViewIndex.has_value())
-					continue;
-
-				size_t idx = 0;
-				for (const auto &normal : fastgltf::iterateAccessor<glm::vec3>(asset, normals)) {
-					if (idx >= vertices.size())
-						break;
-
-					vertices[idx].normal = normal;
-					idx++;
-				}
+				fastgltf::iterateAccessorWithIndex<glm::vec3>(
+						asset, accessor, [&](const glm::vec3 &normal, size_t idx) {
+							vertices.pData[idx].normal = normal;
+						});
 			}
 
 			if (strcmp(pName, "TEXCOORD_0") == 0) {
-				fastgltf::Accessor &uvs = asset.accessors[accessorIndex];
-
-				if (!uvs.bufferViewIndex.has_value())
-					continue;
-
-				size_t idx = 0;
-				for (const auto &uv : fastgltf::iterateAccessor<glm::vec2>(asset, uvs)) {
-					if (idx >= vertices.size())
-						break;
-
-					vertices[idx].uv = uv;
-					idx++;
-				}
+				fastgltf::iterateAccessorWithIndex<glm::vec2>(
+						asset, accessor, [&](const glm::vec2 &texCoord, size_t idx) {
+							vertices.pData[idx].uv = texCoord;
+						});
 			}
 		}
 
 		_generateTangents(indices, vertices);
 
-		size_t materialIndex = primitive.materialIndex.value_or(0);
+		uint64_t materialIndex = primitive.materialIndex.value_or(0);
 
-		primitives.push_back(Primitive{
-				vertices,
-				indices,
-				materialIndex,
-		});
+		pPrimitives[idx] = {
+			vertices,
+			indices,
+			materialIndex,
+		};
+
+		idx++;
 	}
 
+	const char *pName = mesh.name.c_str();
+
 	return {
-		primitives,
-		mesh.name.c_str(),
+		pPrimitives,
+		primitiveCount,
+		pName,
 	};
 }
 

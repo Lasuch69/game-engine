@@ -57,21 +57,13 @@ bool Scene::load(const std::filesystem::path &path) {
 		_materials.push_back(material);
 	}
 
-	for (const AssetLoader::Mesh &sceneMesh : scene.meshes) {
-		std::vector<RS::Primitive> primitives;
-		for (const AssetLoader::Primitive &meshPrimitive : sceneMesh.primitives) {
-			uint64_t materialIndex = meshPrimitive.materialIndex;
-			ObjectID material = _materials[materialIndex];
-
-			RS::Primitive primitive = {};
-			primitive.vertices = meshPrimitive.vertices;
-			primitive.indices = meshPrimitive.indices;
-			primitive.material = material;
-
-			primitives.push_back(primitive);
+	for (const Mesh &sceneMesh : scene.meshes) {
+		for (uint32_t i = 0; i < sceneMesh.primitiveCount; i++) {
+			sceneMesh.pPrimitives[i].materialIndex =
+					_materials[sceneMesh.pPrimitives[i].materialIndex];
 		}
 
-		ObjectID mesh = RS::getSingleton().meshCreate(primitives);
+		ObjectID mesh = RS::getSingleton().meshCreate(sceneMesh);
 		_meshes.push_back(mesh);
 	}
 

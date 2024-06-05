@@ -33,7 +33,7 @@ void RS::cameraSetZFar(float zFar) {
 	_camera.zFar = zFar;
 }
 
-ObjectID RS::meshCreate(const std::vector<Primitive> &primitives) {
+ObjectID RS::meshCreate(const Mesh &mesh) {
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 
@@ -41,9 +41,9 @@ ObjectID RS::meshCreate(const std::vector<Primitive> &primitives) {
 		size_t totalVertexCount = 0;
 		size_t totalIndexCount = 0;
 
-		for (const Primitive &primitive : primitives) {
-			totalVertexCount += primitive.vertices.size();
-			totalIndexCount += primitive.indices.size();
+		for (uint32_t i = 0; i < mesh.primitiveCount; i++) {
+			totalVertexCount += mesh.pPrimitives[i].vertices.count;
+			totalIndexCount += mesh.pPrimitives[i].indices.count;
 		}
 
 		vertices.resize(totalVertexCount);
@@ -55,25 +55,25 @@ ObjectID RS::meshCreate(const std::vector<Primitive> &primitives) {
 
 	std::vector<PrimitiveRD> _primitives = {};
 
-	for (const Primitive &primitive : primitives) {
-		uint32_t indexCount = static_cast<uint32_t>(primitive.indices.size());
+	for (uint32_t i = 0; i < mesh.primitiveCount; i++) {
+		uint32_t indexCount = static_cast<uint32_t>(mesh.pPrimitives[i].indices.count);
 		uint32_t firstIndex = indexOffset;
-		ObjectID material = primitive.material;
+		ObjectID materialIndex = mesh.pPrimitives[i].materialIndex;
 
 		_primitives.push_back({
 				indexCount,
 				firstIndex,
-				material,
+				materialIndex,
 		});
 
-		for (uint32_t index : primitive.indices) {
-			indices[indexOffset] = vertexOffset + index;
+		for (uint32_t j = 0; j < mesh.pPrimitives[i].indices.count; j++) {
+			indices[indexOffset] = vertexOffset + mesh.pPrimitives[i].indices.pData[j];
 			indexOffset++;
 		}
 
 		Vertex *pDst = vertices.data();
-		const Vertex *pSrc = primitive.vertices.data();
-		size_t vertexCount = primitive.vertices.size();
+		const Vertex *pSrc = mesh.pPrimitives[i].vertices.pData;
+		size_t vertexCount = mesh.pPrimitives[i].vertices.count;
 
 		memcpy(&pDst[vertexOffset], pSrc, sizeof(Vertex) * vertexCount);
 

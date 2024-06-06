@@ -3,6 +3,7 @@
 
 #include <cstdint>
 
+#include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
@@ -12,7 +13,7 @@
 typedef struct {
 	uint32_t firstIndex;
 	uint32_t indexCount;
-	ObjectID material;
+	ObjectID materialID;
 } PrimitiveRD;
 
 typedef struct {
@@ -30,6 +31,23 @@ private:
 public:
 	inline ObjectID meshAppend(const MeshRD &mesh) {
 		return _meshOwner.append(mesh);
+	}
+
+	inline const MeshRD *meshGet(ObjectID meshID) {
+		if (!_meshOwner.has(meshID))
+			return nullptr;
+
+		return &_meshOwner[meshID];
+	}
+
+	inline std::vector<MeshRD> meshElements() const {
+		const std::unordered_map<ObjectID, MeshRD> &map = _meshOwner.map();
+		std::vector<MeshRD> elements = {};
+
+		for (auto it = map.begin(); it != map.end(); ++it)
+			elements.push_back(it->second);
+
+		return elements;
 	}
 
 	inline MeshRD meshRemove(ObjectID meshID) {

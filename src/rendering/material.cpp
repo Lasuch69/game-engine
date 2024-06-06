@@ -5,8 +5,11 @@
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_handles.hpp>
 
+#include "rendering/shaders/depth.gen.h"
 #include "rendering/shaders/sky.gen.h"
 #include "rendering/shaders/tonemap.gen.h"
+
+#include "rendering/types/vertex.h"
 
 #include "material.h"
 
@@ -103,6 +106,38 @@ static vk::Pipeline createPipeline(vk::Device device, vk::ShaderModule vertexMod
 		throw std::runtime_error("Graphics pipeline creation failed!");
 
 	return result.value;
+}
+
+void DepthMaterial::create(vk::Device device, vk::RenderPass renderPass) {
+	auto binding = Vertex::getBindingDescription();
+	auto attribute = Vertex::getAttributeDescriptions();
+
+	vk::PipelineVertexInputStateCreateInfo vertexInput;
+	vertexInput.setVertexBindingDescriptions(binding);
+	vertexInput.setVertexAttributeDescriptions(attribute);
+
+	vk::PushConstantRange pushConstantRange;
+	pushConstantRange.setStageFlags(vk::ShaderStageFlagBits::eVertex);
+	pushConstantRange.setSize(sizeof(MeshConstants));
+
+	vk::PipelineLayoutCreateInfo createInfo;
+	createInfo.setPushConstantRanges(pushConstantRange);
+
+	_pipeline.layout = device.createPipelineLayout(createInfo);
+
+	DepthShader spirv;
+
+	vk::ShaderModule vertexModule =
+			createModule(device, spirv.vertexCode, sizeof(spirv.vertexCode));
+
+	vk::ShaderModule fragmentModule =
+			createModule(device, spirv.fragmentCode, sizeof(spirv.fragmentCode));
+
+	_pipeline.handle = createPipeline(device, vertexModule, fragmentModule, _pipeline.layout,
+			renderPass, static_cast<uint32_t>(MaterialPass::DepthOnly), vertexInput, true);
+
+	device.destroyShaderModule(vertexModule);
+	device.destroyShaderModule(fragmentModule);
 }
 
 void SkyEffect::create(

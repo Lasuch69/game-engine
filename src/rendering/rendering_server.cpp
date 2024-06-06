@@ -44,7 +44,7 @@ ObjectID RS::_meshCreate(const Mesh &mesh) {
 		PrimitiveRD primitive = {};
 		primitive.firstIndex = indexOffset;
 		primitive.indexCount = mesh.pPrimitives[i].indices.count;
-		primitive.material = mesh.pPrimitives[i].materialIndex;
+		primitive.materialID = mesh.pPrimitives[i].materialIndex;
 
 		pPrimitives[i] = primitive;
 
@@ -172,13 +172,31 @@ void RS::meshFree(ObjectID meshID) {
 	_meshDestroy(meshID);
 }
 
-ObjectID RenderingServer::meshInstanceCreate() {}
+ObjectID RenderingServer::meshInstanceCreate() {
+	return _meshInstanceOwner.append({});
+}
 
-void RS::meshInstanceSetMesh(ObjectID meshInstanceID, ObjectID meshID) {}
+void RS::meshInstanceSetMesh(ObjectID meshInstanceID, ObjectID meshID) {
+	if (!_meshInstanceOwner.has(meshInstanceID)) {
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "MeshInstance: %ld is invalid!", meshInstanceID);
+		return;
+	}
 
-void RS::meshInstanceSetTransform(ObjectID meshInstanceID, const glm::mat4 &transform) {}
+	_meshInstanceOwner[meshInstanceID].meshID = meshID;
+}
 
-void RS::meshInstanceFree(ObjectID meshInstanceID) {}
+void RS::meshInstanceSetTransform(ObjectID meshInstanceID, const glm::mat4 &transform) {
+	if (!_meshInstanceOwner.has(meshInstanceID)) {
+		SDL_LogError(SDL_LOG_CATEGORY_RENDER, "MeshInstance: %ld is invalid!", meshInstanceID);
+		return;
+	}
+
+	memcpy(_meshInstanceOwner[meshInstanceID].transform, &transform, sizeof(float) * 16);
+}
+
+void RS::meshInstanceFree(ObjectID meshInstanceID) {
+	_meshInstanceOwner.remove(meshInstanceID);
+}
 
 ObjectID RS::lightCreate(LightType type) {
 	return _lightStorage.lightCreate(type);
@@ -214,6 +232,42 @@ void RS::textureDestroy(ObjectID textureID) {
 
 void RenderingServer::draw() {
 	vk::CommandBuffer commandBuffer = _renderingDevice.drawBegin();
+
+	vk::Extent2D extent = _renderingDevice.getSwapchainExtent();
+	float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+
+	glm::mat4 proj = _camera.projectionMatrix(aspect);
+	glm::mat4 view = _camera.viewMatrix();
+
+	glm::mat4 projView = proj * view;
+
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, _depthMaterial.getPipeline());
+
+	std::vector<MeshRD> meshes = _meshStorage.meshElements();
+
+	const std::unordered_map<ObjectID, MeshInstanceRD> &map = _meshInstanceOwner.map();
+
+	for (auto it = map.begin(); it != map.end(); ++it) {
+		const MeshInstanceRD &instance = it->second;
+		const MeshRD *pMesh = _meshStorage.meshGet(instance.meshID);
+
+		vk::DeviceSize offset = 0;
+		commandBuffer.bindVertexBuffers(0, 1, &pMesh->vertexBuffer.buffer, &offset);
+		commandBuffer.bindIndexBuffer(pMesh->indexBuffer.buffer, 0, vk::IndexType::eUint32);
+
+		MeshConstants constants{};
+		memcpy(constants.projView, &projView, sizeof(float) * 16);
+		memcpy(constants.model, &instance.transform, sizeof(float) * 16);
+
+		commandBuffer.pushConstants(_depthMaterial.getPipelineLayout(),
+				vk::ShaderStageFlagBits::eVertex, 0, sizeof(constants), &constants);
+
+		for (uint32_t i = 0; i < pMesh->primitiveCount; i++) {
+			PrimitiveRD primitive = pMesh->pPrimitives[i];
+			commandBuffer.drawIndexed(primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+		}
+	}
+
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
 
@@ -235,7 +289,10 @@ void RS::windowInit(SDL_Window *pWindow) {
 	vk::DescriptorPool descriptorPool = _renderingDevice.getDescriptorPool();
 	vk::RenderPass renderPass = _renderingDevice.getRenderPass();
 
+	_depthMaterial.create(device, renderPass);
+
 	_skyEffect.create(device, descriptorPool, renderPass);
+
 	_tonemapEffect.create(device, descriptorPool, renderPass);
 	_tonemapEffect.updateInput(device, _renderingDevice.getColorView());
 }

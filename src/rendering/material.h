@@ -28,25 +28,20 @@ enum class MaterialPass {
 	Tonemap = 2,
 };
 
-class DepthMaterialInstance;
-
 class DepthMaterial {
 private:
 	Pipeline _pipeline;
 
 public:
-	DepthMaterialInstance createInstance();
-};
+	void create(vk::Device device, vk::RenderPass renderPass);
 
-class DepthMaterialInstance {
-	Pipeline _pipeline;
+	inline vk::PipelineLayout getPipelineLayout() const {
+		return _pipeline.layout;
+	}
 
-private:
-	void bind(vk::CommandBuffer commandBuffer);
-	void pushConstants(vk::CommandBuffer commandBuffer, const MeshConstants &constants);
-	void draw(vk::CommandBuffer commandBuffer);
-
-	DepthMaterialInstance(Pipeline pipeline);
+	inline vk::Pipeline getPipeline() const {
+		return _pipeline.handle;
+	}
 };
 
 class StandardMaterialInstance;
@@ -59,6 +54,7 @@ private:
 	Pipeline _pipeline;
 
 public:
+	void create(vk::Device device, vk::RenderPass renderPass);
 	StandardMaterialInstance createInstance();
 };
 
@@ -69,9 +65,13 @@ class StandardMaterialInstance {
 	Pipeline _pipeline;
 
 private:
-	void bind(vk::CommandBuffer commandBuffer);
-	void pushConstants(vk::CommandBuffer commandBuffer, const MeshConstants &constants);
-	void draw(vk::CommandBuffer commandBuffer);
+	inline vk::PipelineLayout getPipelineLayout() const {
+		return _pipeline.layout;
+	}
+
+	inline vk::Pipeline getPipeline() const {
+		return _pipeline.handle;
+	}
 
 	StandardMaterialInstance(Pipeline pipeline);
 };

@@ -1,11 +1,12 @@
 #ifndef RENDERING_SERVER_H
 #define RENDERING_SERVER_H
 
-#include "rendering/material.h"
 #include <cstdint>
 
 #include <glm/glm.hpp>
 
+#include <rendering/material.h>
+#include <rendering/object_owner.h>
 #include <rendering/rendering_device.h>
 #include <rendering/storage/light_storage.h>
 #include <rendering/storage/mesh_storage.h>
@@ -32,6 +33,13 @@ private:
 	LightStorage _lightStorage;
 	MeshStorage _meshStorage;
 	TextureStorage _textureStorage;
+
+	typedef struct {
+		float transform[16];
+		ObjectID meshID;
+	} MeshInstanceRD;
+
+	ObjectOwner<MeshInstanceRD> _meshInstanceOwner;
 
 	// TODO: move this somewhere else
 	DepthMaterial _depthMaterial;

@@ -228,10 +228,19 @@ void AssetLoader::loadScene(const std::filesystem::path &file) {
 
 	fastgltf::Asset &asset = result.get();
 
-	for (const fastgltf::Mesh &mesh : asset.meshes) {
-		Mesh _mesh = _meshLoad(asset, mesh);
-		ObjectID meshID = RS::getSingleton().meshCreate(_mesh);
-		RS::getSingleton().meshFree(meshID);
+	for (const fastgltf::Node &node : asset.nodes) {
+		glm::mat4 transform = _transformExtract(node);
+
+		if (const fastgltf::Optional<size_t> result = node.meshIndex; result.has_value()) {
+			size_t idx = result.value();
+			Mesh mesh = _meshLoad(asset, asset.meshes[idx]);
+
+			ObjectID meshID = RS::getSingleton().meshCreate(mesh);
+
+			ObjectID meshInstanceID = RS::getSingleton().meshInstanceCreate();
+			RS::getSingleton().meshInstanceSetTransform(meshInstanceID, transform);
+			RS::getSingleton().meshInstanceSetMesh(meshInstanceID, meshID);
+		}
 	}
 
 	for (const fastgltf::Image &image : asset.images) {
@@ -243,6 +252,6 @@ void AssetLoader::loadScene(const std::filesystem::path &file) {
 		_image->convert(Image::Format::RGBA8);
 
 		ObjectID textureID = RS::getSingleton().textureCreate(_image.get());
-		RS::getSingleton().textureDestroy(textureID);
+		// RS::getSingleton().textureDestroy(textureID);
 	}
 }

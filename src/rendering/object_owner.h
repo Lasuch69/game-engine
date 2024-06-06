@@ -15,7 +15,7 @@ public:
 		return _map[id];
 	}
 
-	const std::unordered_map<ObjectID, T> &map() {
+	const std::unordered_map<ObjectID, T> &map() const {
 		return _map;
 	}
 

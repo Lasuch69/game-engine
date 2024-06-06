@@ -23,13 +23,13 @@
 #include "image_loader.h"
 #include "mesh.h"
 
+#include "rendering/rendering_server.h"
+
 #include "asset_loader.h"
 
 const float CANDELA_TO_LUMEN = 12.5663706144; // PI * 4
 
-using namespace AssetLoader;
-
-glm::mat4 _extractTransform(const fastgltf::Node &node, const glm::mat4 &base = glm::mat4(1.0f)) {
+glm::mat4 _transformExtract(const fastgltf::Node &node, const glm::mat4 &base = glm::mat4(1.0f)) {
 	if (const fastgltf::Node::TransformMatrix *pMatrix =
 					std::get_if<fastgltf::Node::TransformMatrix>(&node.transform))
 		return glm::mat4x4(glm::make_mat4x4(pMatrix->data()));
@@ -45,7 +45,7 @@ glm::mat4 _extractTransform(const fastgltf::Node &node, const glm::mat4 &base = 
 	return base;
 }
 
-std::shared_ptr<Image> _loadImage(const fastgltf::Asset &asset, const fastgltf::Image &image,
+std::shared_ptr<Image> _imageLoad(const fastgltf::Asset &asset, const fastgltf::Image &image,
 		const std::filesystem::path &directory) {
 	const fastgltf::sources::URI *pFile = std::get_if<fastgltf::sources::URI>(&image.data);
 
@@ -80,7 +80,7 @@ std::shared_ptr<Image> _loadImage(const fastgltf::Asset &asset, const fastgltf::
 	return nullptr;
 }
 
-void _generateTangents(const IndexArray &indices, VertexArray &vertices) {
+void _tangentsGenerate(const IndexArray &indices, VertexArray &vertices) {
 	assert(indices.count % 3 == 0);
 
 	uint32_t averageCount = vertices.count;
@@ -123,7 +123,7 @@ void _generateTangents(const IndexArray &indices, VertexArray &vertices) {
 	}
 }
 
-Mesh _loadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
+Mesh _meshLoad(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
 	uint32_t primitiveCount = mesh.primitives.size();
 	Primitive *pPrimitives = (Primitive *)malloc(primitiveCount * sizeof(Primitive));
 
@@ -185,7 +185,7 @@ Mesh _loadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
 			}
 		}
 
-		_generateTangents(indices, vertices);
+		_tangentsGenerate(indices, vertices);
 
 		uint64_t materialIndex = primitive.materialIndex.value_or(0);
 
@@ -207,7 +207,7 @@ Mesh _loadMesh(const fastgltf::Asset &asset, const fastgltf::Mesh &mesh) {
 	};
 }
 
-Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
+void AssetLoader::loadScene(const std::filesystem::path &file) {
 	fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
 
 	fastgltf::GltfDataBuffer data;
@@ -217,143 +217,32 @@ Scene AssetLoader::loadGltf(const std::filesystem::path &file) {
 								fastgltf::Options::LoadGLBBuffers |
 								fastgltf::Options::GenerateMeshIndices;
 
-	std::filesystem::path assetRoot = file.parent_path();
-	fastgltf::Expected<fastgltf::Asset> result = parser.loadGltf(&data, assetRoot, options);
+	std::filesystem::path directory = file.parent_path();
+	fastgltf::Expected<fastgltf::Asset> result = parser.loadGltf(&data, directory, options);
 
 	if (fastgltf::Error err = result.error(); err != fastgltf::Error::None) {
 		const char *pMsg = fastgltf::getErrorMessage(err).data();
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Asset loading failed: %s", pMsg);
-
-		return {};
+		return;
 	}
 
 	fastgltf::Asset &asset = result.get();
 
-	Scene scene;
-
-	for (const fastgltf::Material &material : asset.materials) {
-		Material _material = {};
-
-		const std::optional<fastgltf::TextureInfo> &albedoInfo = material.pbrData.baseColorTexture;
-
-		if (albedoInfo.has_value()) {
-			const fastgltf::Image &image = asset.images[albedoInfo->textureIndex];
-			std::shared_ptr<Image> albedoMap(_loadImage(asset, image, file.parent_path()));
-
-			if (albedoMap != nullptr) {
-				albedoMap->convert(Image::Format::RGBA8);
-
-				uint32_t idx = scene.images.size();
-				scene.images.push_back(albedoMap);
-				_material.albedoIndex = idx;
-			}
-		}
-
-		const std::optional<fastgltf::NormalTextureInfo> &normalInfo = material.normalTexture;
-
-		if (normalInfo.has_value()) {
-			const fastgltf::Image &image = asset.images[normalInfo->textureIndex];
-			std::shared_ptr<Image> normalMap(_loadImage(asset, image, file.parent_path()));
-
-			if (normalMap != nullptr) {
-				normalMap->convert(Image::Format::RG8);
-
-				uint32_t idx = scene.images.size();
-				scene.images.push_back(normalMap);
-				_material.normalIndex = idx;
-			}
-		}
-
-		const std::optional<fastgltf::TextureInfo> &metallicRoughnessInfo =
-				material.pbrData.metallicRoughnessTexture;
-
-		if (metallicRoughnessInfo.has_value()) {
-			const fastgltf::Image &image = asset.images[metallicRoughnessInfo->textureIndex];
-			std::shared_ptr<Image> _metallicRoughnessimage(
-					_loadImage(asset, image, file.parent_path()));
-
-			if (_metallicRoughnessimage != nullptr) {
-				{
-					// metallic in blue channel
-					std::shared_ptr<Image> metallicMap(
-							_metallicRoughnessimage->getComponent(Image::Channel::B));
-
-					uint32_t idx = scene.images.size();
-					scene.images.push_back(metallicMap);
-
-					_material.metallicIndex = idx;
-				}
-
-				{
-					// roughness in green channel
-					std::shared_ptr<Image> roughnessMap(
-							_metallicRoughnessimage->getComponent(Image::Channel::G));
-
-					uint32_t idx = scene.images.size();
-					scene.images.push_back(roughnessMap);
-
-					_material.roughnessIndex = idx;
-				}
-			}
-		}
-
-		scene.materials.push_back(_material);
-	}
-
 	for (const fastgltf::Mesh &mesh : asset.meshes) {
-		Mesh _mesh = _loadMesh(asset, mesh);
-		scene.meshes.push_back(_mesh);
+		Mesh _mesh = _meshLoad(asset, mesh);
+		ObjectID meshID = RS::getSingleton().meshCreate(_mesh);
+		RS::getSingleton().meshFree(meshID);
 	}
 
-	for (const fastgltf::Node &node : asset.nodes) {
-		glm::mat4 transform = _extractTransform(node);
-		std::string name = node.name.c_str();
+	for (const fastgltf::Image &image : asset.images) {
+		std::shared_ptr<Image> _image = _imageLoad(asset, image, directory);
 
-		const fastgltf::Optional<size_t> &meshIndex = node.meshIndex;
-		if (meshIndex.has_value()) {
-			MeshInstance meshInstance = {
-				transform,
-				node.meshIndex.value(),
-				name,
-			};
+		if (_image == nullptr)
+			break;
 
-			scene.meshInstances.push_back(meshInstance);
-		}
+		_image->convert(Image::Format::RGBA8);
 
-		const fastgltf::Optional<size_t> &lightIndex = node.lightIndex;
-		if (lightIndex.has_value()) {
-			fastgltf::Light light = asset.lights[lightIndex.value()];
-
-			LightType lightType = LightType::Point;
-			glm::vec3 color = glm::make_vec3(light.color.data());
-			float intensity = light.intensity;
-
-			std::optional<float> range = {};
-
-			if (light.type == fastgltf::LightType::Point) {
-				if (light.range.has_value())
-					range = light.range.value();
-
-				intensity *= CANDELA_TO_LUMEN / 1000.0f;
-				lightType = LightType::Point;
-			} else if (light.type == fastgltf::LightType::Directional) {
-				lightType = LightType::Directional;
-			} else {
-				continue;
-			}
-
-			Light _light = {
-				transform,
-				lightType,
-				color,
-				intensity,
-				range,
-				name,
-			};
-
-			scene.lights.push_back(_light);
-		}
+		ObjectID textureID = RS::getSingleton().textureCreate(_image.get());
+		RS::getSingleton().textureDestroy(textureID);
 	}
-
-	return scene;
 }

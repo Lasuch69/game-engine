@@ -1,23 +1,21 @@
 #ifndef RENDERING_SERVER_H
 #define RENDERING_SERVER_H
 
+#include "rendering/material.h"
 #include <cstdint>
-#include <memory>
 
 #include <glm/glm.hpp>
 
+#include <rendering/rendering_device.h>
+#include <rendering/storage/light_storage.h>
+#include <rendering/storage/mesh_storage.h>
+#include <rendering/storage/texture_storage.h>
+#include <rendering/types/camera.h>
+
 #include <io/mesh.h>
 
-#include "object_owner.h"
-#include "storage/light_storage.h"
-
-#include "types/camera.h"
-#include "types/resource.h"
-
-#define NULL_HANDLE 0
-
-struct SDL_Window;
 class Image;
+struct SDL_Window;
 
 class RenderingServer {
 public:
@@ -27,28 +25,27 @@ public:
 	}
 
 private:
-	RenderingServer() {}
-
-public:
-	struct MaterialInfo {
-		ObjectID albedo;
-		ObjectID normal;
-		ObjectID metallic;
-		ObjectID roughness;
-	};
-
-private:
-	// fallbacks
-	TextureRD _albedoFallback;
-	TextureRD _normalFallback;
-	TextureRD _metallicFallback;
-	TextureRD _roughnessFallback;
+	RenderingDevice _renderingDevice;
 
 	Camera _camera;
-	ObjectOwner<MeshRD> _meshes;
-	ObjectOwner<MeshInstanceRD> _meshInstances;
-	ObjectOwner<TextureRD> _textures;
-	ObjectOwner<MaterialRD> _materials;
+
+	LightStorage _lightStorage;
+	MeshStorage _meshStorage;
+	TextureStorage _textureStorage;
+
+	// TODO: move this somewhere else
+	DepthMaterial _depthMaterial;
+	StandardMaterial _standardMaterial;
+	SkyEffect _skyEffect;
+	TonemapEffect _tonemapEffect;
+
+	ObjectID _meshCreate(const Mesh &mesh);
+	void _meshDestroy(ObjectID meshID);
+
+	ObjectID _textureCreate(const Image *pImage);
+	void _textureDestroy(ObjectID textureID);
+
+	RenderingServer() {}
 
 public:
 	RenderingServer(RenderingServer const &) = delete;
@@ -69,25 +66,14 @@ public:
 
 	ObjectID lightCreate(LightType type);
 	void lightSetTransform(ObjectID light, const glm::mat4 &transform);
-	void lightSetRange(ObjectID light, float range);
 	void lightSetColor(ObjectID light, const glm::vec3 &color);
 	void lightSetIntensity(ObjectID light, float intensity);
 	void lightFree(ObjectID light);
 
-	ObjectID textureCreate(const std::shared_ptr<Image> image);
-	void textureFree(ObjectID texture);
-
-	ObjectID materialCreate(const MaterialInfo &info);
-	void materialFree(ObjectID material);
-
-	void setExposure(float exposure);
-	void setWhite(float white);
-
-	void environmentSkyUpdate(const std::shared_ptr<Image> image);
+	ObjectID textureCreate(const Image *pImage);
+	void textureDestroy(ObjectID texture);
 
 	void draw();
-
-	vk::Instance getVkInstance() const;
 
 	void windowInit(SDL_Window *pWindow);
 	void windowResized(uint32_t width, uint32_t height);

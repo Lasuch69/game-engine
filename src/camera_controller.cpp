@@ -4,7 +4,7 @@
 
 #include <SDL3/SDL_mouse.h>
 
-#include "rendering/rendering_server.h"
+#include <rendering/rendering_server.h>
 
 #include "camera_controller.h"
 

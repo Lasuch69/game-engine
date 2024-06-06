@@ -1,3 +1,4 @@
+#include "io/asset_loader.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -12,9 +13,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "camera_controller.h"
-#include "io/image_loader.h"
 #include "rendering/rendering_server.h"
-#include "scene.h"
 #include "timer.h"
 
 typedef struct {
@@ -22,13 +21,14 @@ typedef struct {
 
 	CameraController camera;
 	Timer timer;
-	Scene scene;
 } AppState;
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 int SDL_AppInit(void **appstate, int argc, char **argv) {
+	SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
+
 	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
 	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", WIDTH, HEIGHT, flags);
 
@@ -42,14 +42,6 @@ int SDL_AppInit(void **appstate, int argc, char **argv) {
 
 	AppState *pState = new AppState;
 	pState->pWindow = pWindow;
-
-	for (int i = 1; i < argc; i++) {
-		// --scene <path>
-		if (strcmp("--scene", argv[i]) == 0 && i < argc - 1) {
-			const char *pFile = argv[i + 1];
-			pState->scene.load(pFile);
-		}
-	}
 
 	appstate[0] = reinterpret_cast<void *>(pState);
 	return 0;
@@ -83,15 +75,7 @@ int SDL_AppEvent(void *appstate, const SDL_Event *event) {
 
 	if (event->type == SDL_EVENT_DROP_FILE) {
 		const char *pFile = event->drop.data;
-
-		if (ImageLoader::isImage(pFile)) {
-			std::shared_ptr<Image> image = ImageLoader::loadFromFile(pFile);
-			RS::getSingleton().environmentSkyUpdate(image);
-			return 0;
-		}
-
-		pState->scene.clear();
-		pState->scene.load(pFile);
+		AssetLoader::loadScene(pFile);
 		return 0;
 	}
 

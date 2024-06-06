@@ -4,12 +4,13 @@
 
 #include "include/filter_incl.glsl"
 
-layout(binding = 0, rg16) uniform writeonly image2D lutSampler;
+layout(location = 0) in vec2 inCoords;
+layout(location = 0) out vec2 outBRDF;
 
-layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+const uint SAMPLE_COUNT = 1024u;
 
 float saturate(float v) {
-return clamp(v, 0.0, 1.0);
+	return clamp(v, 0.0, 1.0);
 }
 
 float geometrySchlickGGX(float nDotV, float roughness) {
@@ -38,8 +39,6 @@ vec2 integrateBRDF(float nDotV, float roughness) {
 
 	vec3 n = vec3(0.0, 0.0, 1.0);
 
-	const uint SAMPLE_COUNT = 1024u;
-
 	for (uint i = 0u; i < SAMPLE_COUNT; i++) {
 		vec2 xi = hammersley(i, SAMPLE_COUNT);
 		vec3 h = importanceSampleGGX(xi, n, roughness);
@@ -63,13 +62,5 @@ vec2 integrateBRDF(float nDotV, float roughness) {
 }
 
 void main() {
-	// offset x by 1 to avoid NaN artifacts
-	uvec2 offset = uvec2(1, 0);
-
-	vec2 lutSize = imageSize(lutSampler);
-	vec2 coords = vec2(gl_GlobalInvocationID.xy + offset) / lutSize;
-	vec2 brdf = integrateBRDF(coords.x, coords.y);
-
-	vec4 value = vec4(brdf, 0.0, 1.0);
-	imageStore(lutSampler, ivec2(gl_GlobalInvocationID.xy), value);
+	outBRDF = integrateBRDF(inCoords.x, inCoords.y);
 }

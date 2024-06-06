@@ -8,13 +8,13 @@
 layout(location = 0) in vec2 inCoords;
 layout(location = 0) out vec4 outFragColor;
 
-layout(set = 0, binding = 0) uniform samplerCube cubeSampler;
+layout(set = 0, binding = 0) uniform sampler2D sourceSampler;
 
 const float PI = 3.1415926535;
 
 void main() {
 	// the sample direction equals the hemisphere's orientation
-	vec3 n = mapToCube(inCoords, gl_ViewIndex, true);
+	vec3 n = mapToCube(inCoords, gl_ViewIndex);
 	vec3 irradiance = vec3(0.0);
 
 	vec3 up = vec3(0.0, 1.0, 0.0);
@@ -32,7 +32,7 @@ void main() {
 			// tangent space to world
 			vec3 coords = tangentSample.x * right + tangentSample.y * up + tangentSample.z * n;
 
-			irradiance += texture(cubeSampler, coords).rgb * cos(theta) * sin(theta);
+			irradiance += texture(sourceSampler, mapToEquirectangular(coords)).rgb * cos(theta) * sin(theta);
 			sampleCount++;
 		}
 	}

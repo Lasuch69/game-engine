@@ -9,12 +9,14 @@
 layout(location = 0) in vec2 inCoords;
 layout(location = 0) out vec4 outFragColor;
 
-layout(set = 0, binding = 0) uniform samplerCube cubeSampler;
+layout(set = 0, binding = 0) uniform sampler2D sourceSampler;
 
 layout(push_constant) uniform PreFilterPushConstants {
 	uint size;
 	float roughness;
 };
+
+const uint SAMPLE_COUNT = 2048u;
 
 float distributionGGX(float nDotH, float roughness) {
 	float a = roughness * roughness;
@@ -29,14 +31,12 @@ float distributionGGX(float nDotH, float roughness) {
 }
 
 void main() {
-	vec3 n = mapToCube(inCoords, gl_ViewIndex, true);
+	vec3 n = mapToCube(inCoords, gl_ViewIndex);
 	vec3 r = n;
 	vec3 v = r;
 
 	vec3 filteredColor = vec3(0.0);
 	float totalWeight = 0.0;
-
-	const uint SAMPLE_COUNT = 2048u;
 
 	for (uint i = 0u; i < SAMPLE_COUNT; i++) {
 		// generates a sample vector that's biased towards the preferred alignment direction (importance sampling).
@@ -59,7 +59,7 @@ void main() {
 
 			float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
 
-			filteredColor += textureLod(cubeSampler, l, mipLevel).rgb * nDotL;
+			filteredColor += textureLod(sourceSampler, mapToEquirectangular(l), mipLevel).rgb * nDotL;
 			totalWeight += nDotL;
 		}
 	}

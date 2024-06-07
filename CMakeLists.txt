@@ -31,6 +31,7 @@ add_library(cvtt
 	${CVTT_DIR}/ConvectionKernels_IndexSelector.cpp
 	${CVTT_DIR}/ConvectionKernels_S3TC.cpp
 	${CVTT_DIR}/ConvectionKernels_Util.cpp
+	${CVTT_DIR}/ConvectionKernels_SingleFile.cpp
 )
 target_include_directories(cvtt PRIVATE ${CVTT_DIR})
 target_compile_options(cvtt PRIVATE -O3)

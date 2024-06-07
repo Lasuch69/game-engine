@@ -21,6 +21,54 @@ execute_process(COMMAND python3 shader_gen.py)
 add_library(SDL3 SHARED IMPORTED)
 set_property(TARGET SDL3 PROPERTY IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/lib/libSDL3.so")
 
+# basis_universal
+
+set(BASIS_UNIVERSAL_DIR thirdparty/basis_universal)
+
+add_library(basis_universal
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_backend.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_basis_file.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_bc7enc.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_comp.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_enc.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_etc.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_frontend.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_gpu_texture.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_kernels_sse.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_opencl.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_pvrtc1_4.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_resample_filters.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_resampler.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_ssim.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/basisu_uastc_enc.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/jpgd.cpp
+	${BASIS_UNIVERSAL_DIR}/encoder/pvpngreader.cpp
+	${BASIS_UNIVERSAL_DIR}/transcoder/basisu_transcoder.cpp
+	${BASIS_UNIVERSAL_DIR}/zstd/zstd.c
+	${BASIS_UNIVERSAL_DIR}/zstd/zstddeclib.c
+)
+target_include_directories(basis_universal PRIVATE ${BASIS_UNIVERSAL_DIR})
+target_compile_options(basis_universal PRIVATE -O3)
+
+# cvtt
+
+set(CVTT_DIR thirdparty/cvtt)
+
+add_library(cvtt
+	${CVTT_DIR}/ConvectionKernels_API.cpp
+	${CVTT_DIR}/ConvectionKernels_BC6H_IO.cpp
+	${CVTT_DIR}/ConvectionKernels_BC7_PrioData.cpp
+	${CVTT_DIR}/ConvectionKernels_BC67.cpp
+	${CVTT_DIR}/ConvectionKernels_BCCommon.cpp
+	${CVTT_DIR}/ConvectionKernels_ETC.cpp
+	${CVTT_DIR}/ConvectionKernels_IndexSelector.cpp
+	${CVTT_DIR}/ConvectionKernels_S3TC.cpp
+	${CVTT_DIR}/ConvectionKernels_SingleFile.cpp
+	${CVTT_DIR}/ConvectionKernels_Util.cpp
+)
+target_include_directories(cvtt PRIVATE ${CVTT_DIR})
+target_compile_options(cvtt PRIVATE -O3)
+
 # fastgltf
 
 set(FASTGLTF_DIR thirdparty/fastgltf)
@@ -77,4 +125,4 @@ target_include_directories(hayaku PRIVATE
 )
 
 target_compile_options(hayaku PRIVATE -Wall -O2)
-target_link_libraries(hayaku PRIVATE Vulkan::Vulkan SDL3 fastgltf zlib)
+target_link_libraries(hayaku PRIVATE Vulkan::Vulkan SDL3 basis_universal cvtt fastgltf zlib)

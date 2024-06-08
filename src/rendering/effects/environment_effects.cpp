@@ -129,7 +129,7 @@ static vk::Sampler createSampler(vk::Device device, uint32_t mipLevels) {
 
 RenderTarget RenderTarget::create(
 		vk::Device device, uint32_t size, vk::PhysicalDeviceMemoryProperties memProperties) {
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+	vk::Format format = vk::Format::eR16G16B16A16Sfloat;
 	vk::ImageUsageFlags usage =
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc;
 
@@ -647,7 +647,7 @@ AllocatedImage EnvironmentEffects::generateBRDF() {
 AllocatedImage EnvironmentEffects::cubemapCreate(vk::ImageView imageView, uint32_t size) {
 	RD &rd = RD::getSingleton();
 
-	const vk::Format FORMAT = vk::Format::eR32G32B32A32Sfloat;
+	const vk::Format FORMAT = vk::Format::eR16G16B16A16Sfloat;
 
 	uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(size))) + 1;
 
@@ -688,7 +688,7 @@ AllocatedImage EnvironmentEffects::filterIrradiance(vk::ImageView imageView) {
 	vk::Sampler sampler = createSampler(_device, 1);
 	_updateFilterSet(imageView, sampler);
 
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+	vk::Format format = vk::Format::eR16G16B16A16Sfloat;
 
 	const uint32_t FILTERED_SIZE = 32;
 
@@ -749,7 +749,7 @@ AllocatedImage EnvironmentEffects::filterSpecular(
 	vk::Sampler sampler = createSampler(_device, mipLevels);
 	_updateFilterSet(imageView, sampler);
 
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+	vk::Format format = vk::Format::eR16G16B16A16Sfloat;
 
 	const uint32_t BASE_SIZE = 128;
 	const uint32_t LEVEL_COUNT = 5;

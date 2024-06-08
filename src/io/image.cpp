@@ -4,84 +4,55 @@
 #include "image.h"
 
 typedef struct {
-	float r, g, b, a;
+	uint8_t r, g, b, a;
 } Color;
 
-static Color _getPixel(const uint8_t *pBytes, const Image::Format &format, uint32_t idx) {
+Color _getPixel(const uint8_t *pBytes, Image::Format format, uint32_t idx) {
 	uint32_t ofs = idx * Image::getFormatChannelCount(format);
-
 	Color color = {};
-	switch (format) {
-		case Image::Format::R8:
-			color.r = pBytes[ofs + 0] / 255.0;
-			color.g = pBytes[ofs + 0] / 255.0;
-			color.b = pBytes[ofs + 0] / 255.0;
-			color.a = 1.0;
-			break;
-		case Image::Format::RG8:
-			color.r = pBytes[ofs + 0] / 255.0;
-			color.g = pBytes[ofs + 1] / 255.0;
-			color.b = 0.0;
-			color.a = 1.0;
-			break;
-		case Image::Format::RGB8:
-			color.r = pBytes[ofs + 0] / 255.0;
-			color.g = pBytes[ofs + 1] / 255.0;
-			color.b = pBytes[ofs + 2] / 255.0;
-			color.a = 1.0;
-			break;
-		case Image::Format::RGBA8:
-			color.r = pBytes[ofs + 0] / 255.0;
-			color.g = pBytes[ofs + 1] / 255.0;
-			color.b = pBytes[ofs + 2] / 255.0;
-			color.a = pBytes[ofs + 3] / 255.0;
-			break;
-		case Image::Format::RGBA32F:
-			// uint8_t to float
-			const float *pData = reinterpret_cast<const float *>(pBytes);
 
-			color.r = pData[ofs + 0];
-			color.g = pData[ofs + 1];
-			color.b = pData[ofs + 2];
-			color.a = pData[ofs + 3];
-			break;
+	if (format == Image::Format::R8) {
+		color.r = pBytes[ofs + 0];
+		color.g = pBytes[ofs + 0];
+		color.b = pBytes[ofs + 0];
+		color.a = 255;
+	} else if (format == Image::Format::RG8) {
+		color.r = pBytes[ofs + 0];
+		color.g = pBytes[ofs + 1];
+		color.b = 0;
+		color.a = 255;
+	} else if (format == Image::Format::RGB8) {
+		color.r = pBytes[ofs + 0];
+		color.g = pBytes[ofs + 1];
+		color.b = pBytes[ofs + 2];
+		color.a = 255;
+	} else if (format == Image::Format::RGBA8) {
+		color.r = pBytes[ofs + 0];
+		color.g = pBytes[ofs + 1];
+		color.b = pBytes[ofs + 2];
+		color.a = pBytes[ofs + 3];
 	}
 
 	return color;
 }
 
-static void _setPixel(
-		uint8_t *pBytes, const Image::Format &format, uint32_t idx, const Color &color) {
+void _setPixel(uint8_t *pBytes, Image::Format format, uint32_t idx, const Color &color) {
 	uint32_t ofs = idx * Image::getFormatChannelCount(format);
 
-	switch (format) {
-		case Image::Format::R8:
-			pBytes[ofs + 0] = color.r * 255;
-			break;
-		case Image::Format::RG8:
-			pBytes[ofs + 0] = color.r * 255;
-			pBytes[ofs + 1] = color.g * 255;
-			break;
-		case Image::Format::RGB8:
-			pBytes[ofs + 0] = color.r * 255;
-			pBytes[ofs + 1] = color.g * 255;
-			pBytes[ofs + 2] = color.b * 255;
-			break;
-		case Image::Format::RGBA8:
-			pBytes[ofs + 0] = color.r * 255;
-			pBytes[ofs + 1] = color.g * 255;
-			pBytes[ofs + 2] = color.b * 255;
-			pBytes[ofs + 3] = color.a * 255;
-			break;
-		case Image::Format::RGBA32F:
-			// uint8_t to float
-			float *pData = reinterpret_cast<float *>(pBytes);
-
-			pData[ofs + 0] = color.r;
-			pData[ofs + 1] = color.g;
-			pData[ofs + 2] = color.b;
-			pData[ofs + 3] = color.a;
-			break;
+	if (format == Image::Format::R8) {
+		pBytes[ofs + 0] = color.r;
+	} else if (format == Image::Format::RG8) {
+		pBytes[ofs + 0] = color.r;
+		pBytes[ofs + 1] = color.g;
+	} else if (format == Image::Format::RGB8) {
+		pBytes[ofs + 0] = color.r;
+		pBytes[ofs + 1] = color.g;
+		pBytes[ofs + 2] = color.b;
+	} else if (format == Image::Format::RGBA8) {
+		pBytes[ofs + 0] = color.r;
+		pBytes[ofs + 1] = color.g;
+		pBytes[ofs + 2] = color.b;
+		pBytes[ofs + 3] = color.a;
 	}
 }
 
@@ -95,8 +66,10 @@ uint32_t Image::getFormatByteSize(const Format &format) {
 			return 3;
 		case Image::Format::RGBA8:
 			return 4;
-		case Image::Format::RGBA32F:
-			return 16;
+		case Image::Format::RGBAF16:
+			return 8;
+		default:
+			break;
 	}
 
 	return 0;
@@ -111,8 +84,10 @@ uint32_t Image::getFormatChannelCount(const Format &format) {
 		case Image::Format::RGB8:
 			return 3;
 		case Image::Format::RGBA8:
-		case Image::Format::RGBA32F:
+		case Image::Format::RGBAF16:
 			return 4;
+		default:
+			break;
 	}
 
 	return 0;
@@ -128,14 +103,33 @@ const char *Image::getFormatName(const Format &format) {
 			return "RGB8";
 		case Image::Format::RGBA8:
 			return "RGBA8";
-		case Image::Format::RGBA32F:
-			return "RGBA32F";
+		case Image::Format::RGBAF16:
+			return "RGBAF16";
+		case Image::Format::BC6HS:
+			return "BC6HS";
+		case Image::Format::BC6HU:
+			return "BC6HU";
 	}
 
 	return "";
 }
 
-void Image::convert(const Format &format) {
+bool Image::isCompressed() const {
+	switch (_format) {
+		case Image::Format::BC6HS:
+		case Image::Format::BC6HU:
+			return true;
+		default:
+			break;
+	}
+
+	return false;
+}
+
+bool Image::convert(const Format &format) {
+	if (isCompressed())
+		return false;
+
 	uint32_t pixelCount = _width * _height;
 	uint32_t byteSize = getFormatByteSize(format);
 
@@ -154,11 +148,15 @@ void Image::convert(const Format &format) {
 
 	_format = format;
 	_data = data;
+
+	return true;
 }
 
 Image *Image::getComponent(const Channel &channel) const {
-	uint32_t pixelCount = _width * _height;
+	if (isCompressed())
+		return nullptr;
 
+	uint32_t pixelCount = _width * _height;
 	std::vector<uint8_t> data(pixelCount);
 
 	const uint8_t *pSrcData = _data.data();

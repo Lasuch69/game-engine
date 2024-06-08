@@ -11,8 +11,45 @@
 
 #include "image_loader.h"
 
+#define FLOAT16_ONE 0x3c00
+
+#define FLOAT16_MAX 0x7bff // 01111011 11111111 =  65504.0
+#define FLOAT16_MIN 0xfbff // 11111011 11111111 = -65504.0
+
 #define STBI_FAILURE 0
 #define STBI_SUCCESS 1
+
+uint16_t _floatToHalf(float value) {
+	union {
+		float value;
+		uint32_t bits;
+	} data;
+
+	data.value = value;
+	uint32_t bits = data.bits;
+
+	uint32_t sign = (bits >> 31) & 0x1;
+	uint32_t exp = (bits >> 23) & 0xff;
+	uint32_t frac = bits & 0x7fffff;
+
+	bool isNegative = sign == 1;
+
+	if (exp == 0xff) {
+		// NaN
+		if (frac > 0)
+			return 0;
+
+		// infinity
+		return isNegative ? FLOAT16_MIN : FLOAT16_MAX;
+	}
+
+	exp = exp - 127 + 15;
+	if (exp >= 0x1f)
+		return isNegative ? FLOAT16_MIN : FLOAT16_MAX;
+
+	frac = frac >> 13;
+	return (sign << 15) + (exp << 10) + frac;
+}
 
 void ImageLoader::_printInfo(const Image *pImage, const char *pFile) {
 	const SDL_LogCategory CATEGORY = SDL_LOG_CATEGORY_APPLICATION;
@@ -82,14 +119,16 @@ Image *ImageLoader::_stbiLoadHDR(const uint8_t *pBuffer, size_t bufferSize) {
 		return nullptr;
 
 	uint32_t pixelCount = width * height;
-	std::vector<float> data(pixelCount * 4);
+	std::vector<uint16_t> data(pixelCount * 4);
 
 	for (uint32_t pixel = 0; pixel < pixelCount; pixel++) {
-		float channels[4] = { 0.0, 0.0, 0.0, 1.0 };
+		uint16_t channels[4];
+		channels[3] = FLOAT16_ONE;
 
 		for (int i = 0; i < numChannels; i++) {
 			size_t offset = pixel * numChannels;
-			channels[i] = pData[offset + i];
+			float value = pData[offset + i];
+			channels[i] = _floatToHalf(value);
 		}
 
 		size_t offset = (pixel * 4);
@@ -100,13 +139,13 @@ Image *ImageLoader::_stbiLoadHDR(const uint8_t *pBuffer, size_t bufferSize) {
 		data[offset + 3] = channels[3];
 	}
 
-	size_t byteSize = data.size() * sizeof(float);
+	size_t byteSize = data.size() * sizeof(uint16_t);
 
 	std::vector<uint8_t> bytes(byteSize);
 	memcpy(bytes.data(), data.data(), byteSize);
 	stbi_image_free(pData);
 
-	return new Image(width, height, Image::Format::RGBA32F, bytes);
+	return new Image(width, height, Image::Format::RGBAF16, bytes);
 }
 
 Image *ImageLoader::_tinyexrLoad(const uint8_t *pBuffer, size_t bufferSize) {
@@ -164,17 +203,18 @@ Image *ImageLoader::_tinyexrLoad(const uint8_t *pBuffer, size_t bufferSize) {
 	uint32_t pixelCount = width * height;
 	const float *const *pData = reinterpret_cast<float **>(image.images);
 
-	std::vector<float> data(pixelCount * 4);
+	std::vector<uint16_t> data(pixelCount * 4);
 
 	for (uint32_t pixel = 0; pixel < pixelCount; pixel++) {
-		// default alpha is 1.0
-		float channels[4] = { 0.0, 0.0, 0.0, 1.0 };
+		uint16_t channels[4];
+		channels[3] = FLOAT16_ONE;
 
 		int idx = 0;
-
-		// channels are in reverse order
 		for (int i = image.num_channels - 1; i >= 0; i -= 1) {
-			channels[idx] = pData[i][pixel];
+			// channels are in reverse order
+			float value = pData[i][pixel];
+			channels[idx] = _floatToHalf(value);
+
 			idx++;
 		}
 
@@ -189,11 +229,11 @@ Image *ImageLoader::_tinyexrLoad(const uint8_t *pBuffer, size_t bufferSize) {
 	FreeEXRImage(&image);
 	FreeEXRHeader(&header);
 
-	size_t byteSize = data.size() * sizeof(float);
+	size_t byteSize = data.size() * sizeof(uint16_t);
 	std::vector<uint8_t> bytes(byteSize);
 	memcpy(bytes.data(), data.data(), byteSize);
 
-	return new Image(width, height, Image::Format::RGBA32F, bytes);
+	return new Image(width, height, Image::Format::RGBAF16, bytes);
 }
 
 bool ImageLoader::isImage(const char *pFile) {

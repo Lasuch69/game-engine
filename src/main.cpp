@@ -11,8 +11,10 @@
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_video.h>
 
+#include <io/compression.h>
+#include <io/image_loader.h>
+
 #include "camera_controller.h"
-#include "io/image_loader.h"
 #include "rendering/rendering_server.h"
 #include "scene.h"
 #include "timer.h"
@@ -29,6 +31,8 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 int SDL_AppInit(void **appstate, int argc, char **argv) {
+	SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
+
 	SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN;
 	SDL_Window *pWindow = SDL_CreateWindow("Hayaku Engine", WIDTH, HEIGHT, flags);
 
@@ -86,6 +90,8 @@ int SDL_AppEvent(void *appstate, const SDL_Event *event) {
 
 		if (ImageLoader::isImage(pFile)) {
 			std::shared_ptr<Image> image = ImageLoader::loadFromFile(pFile);
+			Compression::imageCompress(image.get());
+
 			RS::getSingleton().environmentSkyUpdate(image);
 			return 0;
 		}

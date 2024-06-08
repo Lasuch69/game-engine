@@ -30,8 +30,12 @@ static vk::Format getVkFormat(Image::Format format) {
 			return vk::Format::eR8G8B8Unorm;
 		case Image::Format::RGBA8:
 			return vk::Format::eR8G8B8A8Unorm;
-		case Image::Format::RGBA32F:
-			return vk::Format::eR32G32B32A32Sfloat;
+		case Image::Format::RGBAF16:
+			return vk::Format::eR16G16B16A16Sfloat;
+		case Image::Format::BC6HS:
+			return vk::Format::eBc6HSfloatBlock;
+		case Image::Format::BC6HU:
+			return vk::Format::eBc6HUfloatBlock;
 		default:
 			return vk::Format::eUndefined;
 	}
@@ -531,7 +535,7 @@ void RD::environmentSkyUpdate(const std::shared_ptr<Image> image) {
 	uint32_t width = image->getWidth();
 	uint32_t height = image->getHeight();
 
-	vk::Format format = vk::Format::eR32G32B32A32Sfloat;
+	vk::Format format = vk::Format::eR16G16B16A16Sfloat;
 	std::vector<uint8_t> data = image->getData();
 
 	uint32_t size = std::min(width, height);
@@ -1254,7 +1258,7 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		data.resize(sizeof(float) * 8);
 		memcpy(data.data(), pData, sizeof(float) * 8);
 
-		std::shared_ptr<Image> image(new Image(2, 1, Image::Format::RGBA32F, data));
+		std::shared_ptr<Image> image(new Image(2, 1, Image::Format::RGBAF16, data));
 
 		environmentSkyUpdate(image);
 	}

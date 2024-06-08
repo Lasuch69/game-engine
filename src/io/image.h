@@ -11,7 +11,9 @@ public:
 		RG8,
 		RGB8,
 		RGBA8,
-		RGBA32F,
+		RGBAF16,
+		BC6HS,
+		BC6HU,
 	};
 
 	enum class Channel {
@@ -31,7 +33,9 @@ public:
 	static uint32_t getFormatChannelCount(const Format &format);
 	static const char *getFormatName(const Format &format);
 
-	void convert(const Format &format);
+	bool isCompressed() const;
+
+	bool convert(const Format &format);
 	Image *getComponent(const Channel &channel) const;
 
 	uint32_t getWidth() const;

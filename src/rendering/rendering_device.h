@@ -132,7 +132,7 @@ public:
 			vk::BufferUsageFlags usage, vk::DeviceSize size, VmaAllocationInfo *pAllocInfo = NULL);
 	void bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size);
 	void bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height,
-			vk::ImageLayout layout = vk::ImageLayout::eTransferDstOptimal);
+			vk::ImageLayout layout = vk::ImageLayout::eTransferDstOptimal, uint32_t mipLevel = 0);
 	void bufferSend(vk::Buffer dstBuffer, uint8_t *pData, size_t size);
 	void bufferDestroy(AllocatedBuffer buffer);
 
@@ -145,7 +145,7 @@ public:
 	void imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipLevels,
 			uint32_t arrayLayers, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 	void imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size,
-			vk::ImageLayout layout);
+			vk::ImageLayout layout, uint32_t mipLevel = 0);
 	void imageDestroy(AllocatedImage image);
 
 	vk::ImageView imageViewCreate(vk::Image image, vk::Format format, uint32_t mipLevels,

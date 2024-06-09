@@ -51,6 +51,26 @@ uint16_t _floatToHalf(float value) {
 	return (sign << 15) + (exp << 10) + frac;
 }
 
+/*
+float _halfToFloat(uint16_t value) {
+	uint32_t sign = (value >> 15) & 0x1;
+	uint32_t exp = (value >> 10) & 0x1f;
+	uint32_t frac = value & 0x3ff;
+
+	sign = sign << 31;
+	exp = exp + 127 - 15;
+	frac = frac << 13;
+
+	union {
+		float value;
+		uint32_t bits;
+	} data;
+
+	data.bits = sign + exp + frac;
+	return data.value;
+}
+*/
+
 void ImageLoader::_printInfo(const Image *pImage, const char *pFile) {
 	const SDL_LogCategory CATEGORY = SDL_LOG_CATEGORY_APPLICATION;
 

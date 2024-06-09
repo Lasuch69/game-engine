@@ -199,12 +199,12 @@ void RD::bufferCopy(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize s
 }
 
 void RD::bufferCopyToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height,
-		vk::ImageLayout layout) {
+		vk::ImageLayout layout, uint32_t mipLevel) {
 	vk::CommandBuffer commandBuffer = beginSingleTimeCommands();
 
 	vk::ImageSubresourceLayers imageSubresource;
 	imageSubresource.setAspectMask(vk::ImageAspectFlagBits::eColor);
-	imageSubresource.setMipLevel(0);
+	imageSubresource.setMipLevel(mipLevel);
 	imageSubresource.setBaseArrayLayer(0);
 	imageSubresource.setLayerCount(1);
 
@@ -417,7 +417,7 @@ void RD::imageLayoutTransition(vk::Image image, vk::Format format, uint32_t mipL
 }
 
 void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pData, size_t size,
-		vk::ImageLayout layout) {
+		vk::ImageLayout layout, uint32_t mipLevel) {
 	VmaAllocationInfo stagingAllocInfo;
 	vk::BufferUsageFlags usage = vk::BufferUsageFlagBits::eTransferSrc;
 
@@ -425,7 +425,7 @@ void RD::imageSend(vk::Image image, uint32_t width, uint32_t height, uint8_t *pD
 	memcpy(stagingAllocInfo.pMappedData, pData, size);
 	vmaFlushAllocation(_allocator, stagingBuffer.allocation, 0, VK_WHOLE_SIZE);
 
-	bufferCopyToImage(stagingBuffer.buffer, image, width, height, layout);
+	bufferCopyToImage(stagingBuffer.buffer, image, width, height, layout, mipLevel);
 
 	bufferDestroy(stagingBuffer);
 }

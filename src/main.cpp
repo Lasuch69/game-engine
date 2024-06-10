@@ -55,6 +55,9 @@ int SDL_AppInit(void **appstate, int argc, char **argv) {
 		}
 	}
 
+	Image *pImage = new Image(2, 2, 1, Image::Format::R8, { 255, 0, 255, 0 });
+	pImage->generateMipmaps();
+
 	appstate[0] = reinterpret_cast<void *>(pState);
 	return 0;
 }

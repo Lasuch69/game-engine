@@ -128,7 +128,7 @@ Image *ImageLoader::_stbiLoad(const uint8_t *pBuffer, size_t bufferSize) {
 			break;
 	}
 
-	return new Image(width, height, format, bytes);
+	return new Image(width, height, 1, format, bytes);
 }
 
 Image *ImageLoader::_stbiLoadHDR(const uint8_t *pBuffer, size_t bufferSize) {
@@ -165,7 +165,7 @@ Image *ImageLoader::_stbiLoadHDR(const uint8_t *pBuffer, size_t bufferSize) {
 	memcpy(bytes.data(), data.data(), byteSize);
 	stbi_image_free(pData);
 
-	return new Image(width, height, Image::Format::RGBAF16, bytes);
+	return new Image(width, height, 1, Image::Format::RGBAF16, bytes);
 }
 
 Image *ImageLoader::_tinyexrLoad(const uint8_t *pBuffer, size_t bufferSize) {
@@ -253,7 +253,7 @@ Image *ImageLoader::_tinyexrLoad(const uint8_t *pBuffer, size_t bufferSize) {
 	std::vector<uint8_t> bytes(byteSize);
 	memcpy(bytes.data(), data.data(), byteSize);
 
-	return new Image(width, height, Image::Format::RGBAF16, bytes);
+	return new Image(width, height, 1, Image::Format::RGBAF16, bytes);
 }
 
 bool ImageLoader::isImage(const char *pFile) {

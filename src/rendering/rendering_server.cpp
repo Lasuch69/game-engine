@@ -356,28 +356,28 @@ void RS::windowInit(SDL_Window *pWindow) {
 
 	{
 		std::vector<uint8_t> data = { 255, 255, 255, 255 };
-		std::shared_ptr<Image> albedo(new Image(1, 1, Image::Format::RGBA8, data));
+		std::shared_ptr<Image> albedo(new Image(1, 1, 1, Image::Format::RGBA8, data));
 
 		_albedoFallback = rd.textureCreate(albedo);
 	}
 
 	{
 		std::vector<uint8_t> data = { 127, 127 };
-		std::shared_ptr<Image> normal(new Image(1, 1, Image::Format::RG8, data));
+		std::shared_ptr<Image> normal(new Image(1, 1, 1, Image::Format::RG8, data));
 
 		_normalFallback = rd.textureCreate(normal);
 	}
 
 	{
 		std::vector<uint8_t> data = { 0 };
-		std::shared_ptr<Image> metallic(new Image(1, 1, Image::Format::R8, data));
+		std::shared_ptr<Image> metallic(new Image(1, 1, 1, Image::Format::R8, data));
 
 		_metallicFallback = rd.textureCreate(metallic);
 	}
 
 	{
 		std::vector<uint8_t> data = { 127 };
-		std::shared_ptr<Image> roughness(new Image(1, 1, Image::Format::R8, data));
+		std::shared_ptr<Image> roughness(new Image(1, 1, 1, Image::Format::R8, data));
 
 		_roughnessFallback = rd.textureCreate(roughness);
 	}

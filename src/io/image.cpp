@@ -1,62 +1,12 @@
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "image.h"
 
-typedef struct {
-	uint8_t r, g, b, a;
-} Color;
-
-Color _getPixel(const uint8_t *pBytes, Image::Format format, uint32_t idx) {
-	uint32_t ofs = idx * Image::getFormatChannelCount(format);
-	Color color = {};
-
-	if (format == Image::Format::R8) {
-		color.r = pBytes[ofs + 0];
-		color.g = pBytes[ofs + 0];
-		color.b = pBytes[ofs + 0];
-		color.a = 255;
-	} else if (format == Image::Format::RG8) {
-		color.r = pBytes[ofs + 0];
-		color.g = pBytes[ofs + 1];
-		color.b = 0;
-		color.a = 255;
-	} else if (format == Image::Format::RGB8) {
-		color.r = pBytes[ofs + 0];
-		color.g = pBytes[ofs + 1];
-		color.b = pBytes[ofs + 2];
-		color.a = 255;
-	} else if (format == Image::Format::RGBA8) {
-		color.r = pBytes[ofs + 0];
-		color.g = pBytes[ofs + 1];
-		color.b = pBytes[ofs + 2];
-		color.a = pBytes[ofs + 3];
-	}
-
-	return color;
-}
-
-void _setPixel(uint8_t *pBytes, Image::Format format, uint32_t idx, const Color &color) {
-	uint32_t ofs = idx * Image::getFormatChannelCount(format);
-
-	if (format == Image::Format::R8) {
-		pBytes[ofs + 0] = color.r;
-	} else if (format == Image::Format::RG8) {
-		pBytes[ofs + 0] = color.r;
-		pBytes[ofs + 1] = color.g;
-	} else if (format == Image::Format::RGB8) {
-		pBytes[ofs + 0] = color.r;
-		pBytes[ofs + 1] = color.g;
-		pBytes[ofs + 2] = color.b;
-	} else if (format == Image::Format::RGBA8) {
-		pBytes[ofs + 0] = color.r;
-		pBytes[ofs + 1] = color.g;
-		pBytes[ofs + 2] = color.b;
-		pBytes[ofs + 3] = color.a;
-	}
-}
-
-uint32_t Image::getFormatByteSize(const Format &format) {
+uint32_t Image::getFormatByteSize(Format format) {
 	switch (format) {
 		case Image::Format::R8:
 			return 1;
@@ -75,7 +25,7 @@ uint32_t Image::getFormatByteSize(const Format &format) {
 	return 0;
 }
 
-uint32_t Image::getFormatChannelCount(const Format &format) {
+uint32_t Image::getFormatChannelCount(Format format) {
 	switch (format) {
 		case Image::Format::R8:
 			return 1;
@@ -93,7 +43,7 @@ uint32_t Image::getFormatChannelCount(const Format &format) {
 	return 0;
 }
 
-const char *Image::getFormatName(const Format &format) {
+const char *Image::getFormatName(Format format) {
 	switch (format) {
 		case Image::Format::R8:
 			return "R8";
@@ -126,69 +76,127 @@ bool Image::isCompressed() const {
 	return false;
 }
 
-bool Image::convert(const Format &format) {
+bool Image::convert(Format format) {
 	if (isCompressed())
 		return false;
 
 	uint32_t pixelCount = _width * _height;
-	uint32_t byteSize = getFormatByteSize(format);
 
-	std::vector<uint8_t> data(pixelCount * byteSize);
+	uint32_t srcChannelCount = getFormatChannelCount(_format);
+	uint32_t dstChannelCount = getFormatChannelCount(format);
 
-	uint8_t *pSrcData = _data.data();
-	Format srcFormat = _format;
+	std::vector<uint8_t> data(pixelCount * dstChannelCount);
 
-	uint8_t *pDstData = data.data();
-	Format dstFormat = format;
+	for (uint32_t i = 0; i < pixelCount; i++) {
+		uint8_t channels[4] = { 0, 0, 0, 255 };
 
-	for (uint32_t pixelIdx = 0; pixelIdx < pixelCount; pixelIdx++) {
-		Color color = _getPixel(pSrcData, srcFormat, pixelIdx);
-		_setPixel(pDstData, dstFormat, pixelIdx, color);
+		for (uint32_t channel = 0; channel < srcChannelCount; channel++)
+			channels[channel] = _data[i * srcChannelCount];
+
+		for (uint32_t channel = 0; channel < dstChannelCount; channel++)
+			data[i * dstChannelCount] = channels[channel];
 	}
 
 	_format = format;
 	_data = data;
-
 	return true;
 }
 
-Image *Image::getComponent(const Channel &channel) const {
+Image *Image::getComponent(Channel channel) const {
 	if (isCompressed())
 		return nullptr;
 
 	uint32_t pixelCount = _width * _height;
-	std::vector<uint8_t> data(pixelCount);
 
-	const uint8_t *pSrcData = _data.data();
-	Format srcFormat = _format;
+	uint32_t srcChannelCount = getFormatChannelCount(_format);
+	uint32_t dstChannelCount = 1;
 
-	uint8_t *pDstData = data.data();
-	Format dstFormat = Format::R8;
+	std::vector<uint8_t> data(pixelCount * dstChannelCount);
 
-	for (size_t pixelIdx = 0; pixelIdx < pixelCount; pixelIdx++) {
-		Color src = _getPixel(pSrcData, srcFormat, pixelIdx);
-		Color color = {};
+	for (uint32_t i = 0; i < pixelCount; i++) {
+		uint8_t channels[4] = { 0, 0, 0, 255 };
 
-		// swizzle
-		switch (channel) {
-			case Channel::R:
-				color.r = src.r;
-				break;
-			case Channel::G:
-				color.r = src.g;
-				break;
-			case Channel::B:
-				color.r = src.b;
-				break;
-			case Channel::A:
-				color.r = src.a;
-				break;
-		}
+		for (uint32_t channel = 0; channel < srcChannelCount; channel++)
+			channels[channel] = _data[i * srcChannelCount];
 
-		_setPixel(pDstData, dstFormat, pixelIdx, color);
+		data[i] = channels[static_cast<uint32_t>(channel)];
 	}
 
-	return new Image(_width, _height, Format::R8, data);
+	return new Image(_width, _height, 1, Format::R8, data);
+}
+
+typedef struct {
+	uint8_t channels[4];
+} Color8;
+
+static uint32_t max(uint32_t a, uint32_t b) {
+	return (a > b) ? a : b;
+}
+
+static Color8 getPixel(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t channels,
+		const std::vector<uint8_t> &data) {
+	if (x >= w)
+		x = w - 1;
+	if (y >= h)
+		y = h - 1;
+
+	Color8 color;
+	color.channels[3] = 255;
+
+	uint32_t offset = ((y * w) + x) * channels;
+	for (uint32_t i = 0; i < channels; i++)
+		color.channels[i] = data[offset + i];
+
+	return color;
+}
+
+bool Image::generateMipmaps() {
+	uint32_t lastWidth = _width;
+	uint32_t lastHeight = _height;
+	std::vector<uint8_t> lastData = _data;
+
+	uint32_t channels = getFormatChannelCount(_format);
+	size_t offset = _data.size();
+
+	printf("width: %d, height: %d\n", _width, _height);
+	printf("size: %ld\n", _data.size());
+
+	while (lastWidth > 1 || lastHeight > 1) {
+		uint32_t mipmapWidth = max(lastWidth >> 1, 1);
+		uint32_t mipmapHeight = max(lastHeight >> 1, 1);
+		std::vector<uint8_t> mipmapData(mipmapWidth * mipmapHeight * channels);
+
+		uint32_t idx = 0;
+		for (uint32_t y = 0; y < lastHeight; y += 2) {
+			for (uint32_t x = 0; x < lastWidth; x += 2) {
+				Color8 p00 = getPixel(x, y, lastWidth, lastHeight, channels, lastData);
+				Color8 p10 = getPixel(x + 1, y, lastWidth, lastHeight, channels, lastData);
+				Color8 p01 = getPixel(x, y + 1, lastWidth, lastHeight, channels, lastData);
+				Color8 p11 = getPixel(x + 1, y + 1, lastWidth, lastHeight, channels, lastData);
+
+				for (uint32_t i = 0; i < channels; i++) {
+					uint16_t v0 = p00.channels[i] + p01.channels[i];
+					uint16_t v1 = p10.channels[i] + p11.channels[i];
+
+					mipmapData[idx] = (v0 + v1) >> 2;
+					idx++;
+				}
+			}
+		}
+
+		printf("width: %d, height: %d\n", mipmapWidth, mipmapHeight);
+		printf("size: %ld\n", mipmapData.size());
+
+		size_t newSize = _data.size() + mipmapData.size();
+		_data.resize(newSize);
+		memcpy(&_data[offset], mipmapData.data(), mipmapData.size());
+
+		lastWidth = mipmapWidth;
+		lastHeight = mipmapHeight;
+		lastData = mipmapData;
+	}
+
+	return false;
 }
 
 uint32_t Image::getWidth() const {
@@ -199,6 +207,10 @@ uint32_t Image::getHeight() const {
 	return _height;
 }
 
+uint32_t Image::getMipLevels() const {
+	return _mipLevels;
+}
+
 Image::Format Image::getFormat() const {
 	return _format;
 }
@@ -207,9 +219,11 @@ std::vector<uint8_t> Image::getData() const {
 	return _data;
 }
 
-Image::Image(uint32_t width, uint32_t height, Format format, const std::vector<uint8_t> &data) {
+Image::Image(uint32_t width, uint32_t height, uint32_t mipLevels, Format format,
+		std::vector<uint8_t> data) {
 	_width = width;
 	_height = height;
+	_mipLevels = mipLevels;
 	_format = format;
 	_data = data;
 }

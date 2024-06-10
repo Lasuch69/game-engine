@@ -1258,7 +1258,7 @@ void RD::windowInit(vk::SurfaceKHR surface, uint32_t width, uint32_t height) {
 		data.resize(sizeof(float) * 8);
 		memcpy(data.data(), pData, sizeof(float) * 8);
 
-		std::shared_ptr<Image> image(new Image(2, 1, Image::Format::RGBAF16, data));
+		std::shared_ptr<Image> image(new Image(2, 1, 1, Image::Format::RGBAF16, data));
 
 		environmentSkyUpdate(image);
 	}

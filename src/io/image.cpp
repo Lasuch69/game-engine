@@ -4,64 +4,181 @@
 #include <cstring>
 #include <vector>
 
+#include <math/float16.h>
+#include <math/util.h>
+
 #include "image.h"
 
-uint32_t Image::getFormatByteSize(Format format) {
-	switch (format) {
-		case Image::Format::R8:
-			return 1;
-		case Image::Format::RG8:
-			return 2;
-		case Image::Format::RGB8:
-			return 3;
-		case Image::Format::RGBA8:
-			return 4;
-		case Image::Format::RGBAF16:
-			return 8;
-		default:
-			break;
+typedef struct {
+	uint32_t width, height;
+	size_t bufferLength;
+	uint8_t *pBuffer;
+} Level;
+
+typedef struct {
+	uint32_t levelCount;
+	Level *pLevels;
+} MipmapData;
+
+typedef struct {
+	uint8_t channels[4];
+} Color8;
+
+typedef struct {
+	half channels[4];
+} Color;
+
+static uint32_t getLevelCount(uint32_t width, uint32_t height) {
+	uint32_t levelCount = 0;
+	while (width > 1 || height > 1) {
+		width = max<uint32_t>(width >> 1, 1);
+		height = max<uint32_t>(height >> 1, 1);
+
+		levelCount++;
 	}
 
-	return 0;
+	return levelCount;
 }
 
-uint32_t Image::getFormatChannelCount(Format format) {
-	switch (format) {
-		case Image::Format::R8:
-			return 1;
-		case Image::Format::RG8:
-			return 2;
-		case Image::Format::RGB8:
-			return 3;
-		case Image::Format::RGBA8:
-		case Image::Format::RGBAF16:
-			return 4;
-		default:
-			break;
-	}
+static Color8 getPixel8(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+		uint32_t channelCount, const uint8_t *pBuffer) {
+	x = min<uint32_t>(x, width - 1);
+	y = min<uint32_t>(y, height - 1);
 
-	return 0;
+	Color8 color;
+	color.channels[3] = 255;
+
+	uint32_t offset = ((y * width) + x) * channelCount;
+	for (uint32_t i = 0; i < channelCount; i++)
+		color.channels[i] = pBuffer[offset + i];
+
+	return color;
 }
 
-const char *Image::getFormatName(Format format) {
-	switch (format) {
-		case Image::Format::R8:
-			return "R8";
-		case Image::Format::RG8:
-			return "RG8";
-		case Image::Format::RGB8:
-			return "RGB8";
-		case Image::Format::RGBA8:
-			return "RGBA8";
-		case Image::Format::RGBAF16:
-			return "RGBAF16";
-		case Image::Format::BC6HS:
-			return "BC6HS";
-		case Image::Format::BC6HU:
-			return "BC6HU";
+static MipmapData mipmapsGenerateU8(
+		uint32_t width, uint32_t height, uint32_t channels, uint8_t *pData) {
+	uint32_t levelCount = getLevelCount(width, height);
+
+	uint32_t lastWidth = width;
+	uint32_t lastHeight = height;
+
+	uint8_t *pLastBuffer = pData;
+
+	MipmapData mipmapData;
+	mipmapData.levelCount = levelCount;
+	mipmapData.pLevels = new Level[levelCount];
+
+	for (uint32_t i = 0; i < levelCount; i++) {
+		uint32_t mipmapWidth = max<uint32_t>(lastWidth >> 1, 1);
+		uint32_t mipmapHeight = max<uint32_t>(lastHeight >> 1, 1);
+
+		size_t bufferLength = mipmapWidth * mipmapHeight * channels;
+		uint8_t *pBuffer = new uint8_t[bufferLength];
+
+		uint32_t idx = 0;
+		for (uint32_t y = 0; y < lastHeight; y += 2) {
+			for (uint32_t x = 0; x < lastWidth; x += 2) {
+				Color8 p00 = getPixel8(x, y, lastWidth, lastHeight, channels, pLastBuffer);
+				Color8 p10 = getPixel8(x + 1, y, lastWidth, lastHeight, channels, pLastBuffer);
+				Color8 p01 = getPixel8(x, y + 1, lastWidth, lastHeight, channels, pLastBuffer);
+				Color8 p11 = getPixel8(x + 1, y + 1, lastWidth, lastHeight, channels, pLastBuffer);
+
+				for (uint32_t i = 0; i < channels; i++) {
+					uint16_t v0 = p00.channels[i] + p01.channels[i];
+					uint16_t v1 = p10.channels[i] + p11.channels[i];
+					pBuffer[idx] = (v0 + v1) >> 2;
+					idx++;
+				}
+			}
+		}
+
+		Level level;
+		level.width = mipmapWidth;
+		level.height = mipmapHeight;
+		level.bufferLength = bufferLength;
+		level.pBuffer = pBuffer;
+
+		mipmapData.pLevels[i] = level;
+
+		lastWidth = mipmapWidth;
+		lastHeight = mipmapHeight;
+
+		pLastBuffer = pBuffer;
 	}
 
-	return "";
+	return mipmapData;
+}
+
+static Color getPixelF16(
+		uint32_t x, uint32_t y, uint32_t width, uint32_t height, const half *pBuffer) {
+	x = min<uint32_t>(x, width - 1);
+	y = min<uint32_t>(y, height - 1);
+
+	uint32_t offset = ((y * width) + x) * 4;
+
+	Color color;
+	color.channels[0] = pBuffer[offset + 0];
+	color.channels[1] = pBuffer[offset + 1];
+	color.channels[2] = pBuffer[offset + 2];
+	color.channels[3] = pBuffer[offset + 3];
+
+	return color;
+}
+
+static MipmapData mipmapsGenerateF16(uint32_t width, uint32_t height, uint8_t *pData) {
+	uint32_t levelCount = getLevelCount(width, height);
+
+	uint32_t lastWidth = width;
+	uint32_t lastHeight = height;
+
+	half *pLastBuffer = reinterpret_cast<half *>(pData);
+
+	MipmapData mipmapData;
+	mipmapData.levelCount = levelCount;
+	mipmapData.pLevels = new Level[levelCount];
+
+	const uint32_t CHANNEL_COUNT = 4;
+
+	for (uint32_t i = 0; i < levelCount; i++) {
+		uint32_t mipmapWidth = max<uint32_t>(lastWidth >> 1, 1);
+		uint32_t mipmapHeight = max<uint32_t>(lastHeight >> 1, 1);
+
+		size_t bufferLength = mipmapWidth * mipmapHeight * CHANNEL_COUNT;
+		half *pBuffer = new half[bufferLength];
+
+		uint32_t idx = 0;
+		for (uint32_t y = 0; y < lastHeight; y += 2) {
+			for (uint32_t x = 0; x < lastWidth; x += 2) {
+				Color p00 = getPixelF16(x, y, lastWidth, lastHeight, pLastBuffer);
+				Color p10 = getPixelF16(x + 1, y, lastWidth, lastHeight, pLastBuffer);
+				Color p01 = getPixelF16(x, y + 1, lastWidth, lastHeight, pLastBuffer);
+				Color p11 = getPixelF16(x + 1, y + 1, lastWidth, lastHeight, pLastBuffer);
+
+				// FIXME: halfAverageApprox() is not suitable for negative values
+				for (int i = 0; i < CHANNEL_COUNT; i++) {
+					half h0 = halfAverageApprox(p00.channels[i], p10.channels[i]);
+					half h1 = halfAverageApprox(p01.channels[i], p11.channels[i]);
+					pBuffer[idx] = halfAverageApprox(h0, h1);
+					idx++;
+				}
+			}
+		}
+
+		Level level;
+		level.width = mipmapWidth;
+		level.height = mipmapHeight;
+		level.bufferLength = bufferLength * sizeof(half);
+		level.pBuffer = reinterpret_cast<uint8_t *>(pBuffer);
+
+		mipmapData.pLevels[i] = level;
+
+		lastWidth = mipmapWidth;
+		lastHeight = mipmapHeight;
+
+		pLastBuffer = pBuffer;
+	}
+
+	return mipmapData;
 }
 
 bool Image::isCompressed() const {
@@ -125,78 +242,41 @@ Image *Image::getComponent(Channel channel) const {
 	return new Image(_width, _height, 1, Format::R8, data);
 }
 
-typedef struct {
-	uint8_t channels[4];
-} Color8;
-
-static uint32_t max(uint32_t a, uint32_t b) {
-	return (a > b) ? a : b;
-}
-
-static Color8 getPixel(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t channels,
-		const std::vector<uint8_t> &data) {
-	if (x >= w)
-		x = w - 1;
-	if (y >= h)
-		y = h - 1;
-
-	Color8 color;
-	color.channels[3] = 255;
-
-	uint32_t offset = ((y * w) + x) * channels;
-	for (uint32_t i = 0; i < channels; i++)
-		color.channels[i] = data[offset + i];
-
-	return color;
-}
-
 bool Image::generateMipmaps() {
-	uint32_t lastWidth = _width;
-	uint32_t lastHeight = _height;
-	std::vector<uint8_t> lastData = _data;
+	if (isCompressed())
+		return false;
 
-	uint32_t channels = getFormatChannelCount(_format);
-	size_t offset = _data.size();
+	MipmapData mipmaps;
 
-	printf("width: %d, height: %d\n", _width, _height);
-	printf("size: %ld\n", _data.size());
-
-	while (lastWidth > 1 || lastHeight > 1) {
-		uint32_t mipmapWidth = max(lastWidth >> 1, 1);
-		uint32_t mipmapHeight = max(lastHeight >> 1, 1);
-		std::vector<uint8_t> mipmapData(mipmapWidth * mipmapHeight * channels);
-
-		uint32_t idx = 0;
-		for (uint32_t y = 0; y < lastHeight; y += 2) {
-			for (uint32_t x = 0; x < lastWidth; x += 2) {
-				Color8 p00 = getPixel(x, y, lastWidth, lastHeight, channels, lastData);
-				Color8 p10 = getPixel(x + 1, y, lastWidth, lastHeight, channels, lastData);
-				Color8 p01 = getPixel(x, y + 1, lastWidth, lastHeight, channels, lastData);
-				Color8 p11 = getPixel(x + 1, y + 1, lastWidth, lastHeight, channels, lastData);
-
-				for (uint32_t i = 0; i < channels; i++) {
-					uint16_t v0 = p00.channels[i] + p01.channels[i];
-					uint16_t v1 = p10.channels[i] + p11.channels[i];
-
-					mipmapData[idx] = (v0 + v1) >> 2;
-					idx++;
-				}
-			}
-		}
-
-		printf("width: %d, height: %d\n", mipmapWidth, mipmapHeight);
-		printf("size: %ld\n", mipmapData.size());
-
-		size_t newSize = _data.size() + mipmapData.size();
-		_data.resize(newSize);
-		memcpy(&_data[offset], mipmapData.data(), mipmapData.size());
-
-		lastWidth = mipmapWidth;
-		lastHeight = mipmapHeight;
-		lastData = mipmapData;
+	if (_format == Format::RGBAF16) {
+		mipmaps = mipmapsGenerateF16(_width, _height, _data.data());
+	} else {
+		uint32_t channelCount = getFormatChannelCount(_format);
+		mipmaps = mipmapsGenerateU8(_width, _height, channelCount, _data.data());
 	}
 
-	return false;
+	size_t byteOffset = _data.size();
+	size_t newSize = _data.size();
+
+	for (uint32_t i = 0; i < mipmaps.levelCount; i++) {
+		Level level = mipmaps.pLevels[i];
+		newSize += level.bufferLength;
+	}
+
+	_data.resize(newSize);
+
+	for (uint32_t i = 0; i < mipmaps.levelCount; i++) {
+		Level level = mipmaps.pLevels[i];
+		memcpy(&_data[byteOffset], level.pBuffer, level.bufferLength);
+		free(level.pBuffer);
+
+		byteOffset += level.bufferLength;
+	}
+
+	free(mipmaps.pLevels);
+
+	_mipLevels = mipmaps.levelCount + 1;
+	return true;
 }
 
 uint32_t Image::getWidth() const {

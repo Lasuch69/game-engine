@@ -30,10 +30,6 @@ private:
 	std::vector<uint8_t> _data = {};
 
 public:
-	static uint32_t getFormatByteSize(Format format);
-	static uint32_t getFormatChannelCount(Format format);
-	static const char *getFormatName(Format format);
-
 	bool isCompressed() const;
 
 	bool convert(Format format);
@@ -49,6 +45,65 @@ public:
 
 	Image(uint32_t width, uint32_t height, uint32_t mipLevels, Format format,
 			std::vector<uint8_t> data);
+
+public:
+	static uint32_t getFormatByteSize(Format format) {
+		switch (format) {
+			case Image::Format::R8:
+				return 1;
+			case Image::Format::RG8:
+				return 2;
+			case Image::Format::RGB8:
+				return 3;
+			case Image::Format::RGBA8:
+				return 4;
+			case Image::Format::RGBAF16:
+				return 8;
+			default:
+				break;
+		}
+
+		return 0;
+	};
+
+	static uint32_t getFormatChannelCount(Format format) {
+		switch (format) {
+			case Image::Format::R8:
+				return 1;
+			case Image::Format::RG8:
+				return 2;
+			case Image::Format::RGB8:
+				return 3;
+			case Image::Format::RGBA8:
+			case Image::Format::RGBAF16:
+				return 4;
+			default:
+				break;
+		}
+
+		return 0;
+	}
+
+	static const char *getFormatName(Format format) {
+		switch (format) {
+			case Image::Format::R8:
+				return "R8";
+			case Image::Format::RG8:
+				return "RG8";
+			case Image::Format::RGB8:
+				return "RGB8";
+			case Image::Format::RGBA8:
+				return "RGBA8";
+			case Image::Format::RGBAF16:
+				return "RGBAF16";
+			case Image::Format::BC6HS:
+				return "BC6HS";
+			case Image::Format::BC6HU:
+				return "BC6HU";
+		}
+
+		return "";
+	}
 };
 
 #endif // !IMAGE_H

@@ -55,9 +55,6 @@ int SDL_AppInit(void **appstate, int argc, char **argv) {
 		}
 	}
 
-	// Image *pImage = new Image(2, 2, 1, Image::Format::R8, { 255, 0, 255, 0 });
-	// pImage->generateMipmaps();
-
 	appstate[0] = reinterpret_cast<void *>(pState);
 	return 0;
 }
@@ -93,7 +90,8 @@ int SDL_AppEvent(void *appstate, const SDL_Event *event) {
 
 		if (ImageLoader::isImage(pFile)) {
 			std::shared_ptr<Image> image = ImageLoader::loadFromFile(pFile);
-			Compression::imageCompress(image.get());
+			image->mipmapsGenerate();
+			image->compress();
 
 			RS::getSingleton().environmentSkyUpdate(image);
 			return 0;

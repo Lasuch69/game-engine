@@ -30,12 +30,13 @@ private:
 	std::vector<uint8_t> _data = {};
 
 public:
+	bool compress();
 	bool isCompressed() const;
 
 	bool convert(Format format);
 	Image *getComponent(Channel channel) const;
 
-	bool generateMipmaps();
+	bool mipmapsGenerate();
 
 	uint32_t getWidth() const;
 	uint32_t getHeight() const;

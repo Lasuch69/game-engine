@@ -8,6 +8,7 @@
 #include <math/util.h>
 
 #include "image.h"
+#include "io/compression.h"
 
 typedef struct {
 	uint32_t width, height;
@@ -26,7 +27,7 @@ typedef struct {
 
 typedef struct {
 	half channels[4];
-} Color;
+} ColorF16;
 
 static uint32_t getLevelCount(uint32_t width, uint32_t height) {
 	uint32_t levelCount = 0;
@@ -109,14 +110,14 @@ static MipmapData mipmapsGenerateU8(
 	return mipmapData;
 }
 
-static Color getPixelF16(
+static ColorF16 getPixelF16(
 		uint32_t x, uint32_t y, uint32_t width, uint32_t height, const half *pBuffer) {
 	x = min<uint32_t>(x, width - 1);
 	y = min<uint32_t>(y, height - 1);
 
 	uint32_t offset = ((y * width) + x) * 4;
 
-	Color color;
+	ColorF16 color;
 	color.channels[0] = pBuffer[offset + 0];
 	color.channels[1] = pBuffer[offset + 1];
 	color.channels[2] = pBuffer[offset + 2];
@@ -149,10 +150,10 @@ static MipmapData mipmapsGenerateF16(uint32_t width, uint32_t height, uint8_t *p
 		uint32_t idx = 0;
 		for (uint32_t y = 0; y < lastHeight; y += 2) {
 			for (uint32_t x = 0; x < lastWidth; x += 2) {
-				Color p00 = getPixelF16(x, y, lastWidth, lastHeight, pLastBuffer);
-				Color p10 = getPixelF16(x + 1, y, lastWidth, lastHeight, pLastBuffer);
-				Color p01 = getPixelF16(x, y + 1, lastWidth, lastHeight, pLastBuffer);
-				Color p11 = getPixelF16(x + 1, y + 1, lastWidth, lastHeight, pLastBuffer);
+				ColorF16 p00 = getPixelF16(x, y, lastWidth, lastHeight, pLastBuffer);
+				ColorF16 p10 = getPixelF16(x + 1, y, lastWidth, lastHeight, pLastBuffer);
+				ColorF16 p01 = getPixelF16(x, y + 1, lastWidth, lastHeight, pLastBuffer);
+				ColorF16 p11 = getPixelF16(x + 1, y + 1, lastWidth, lastHeight, pLastBuffer);
 
 				// FIXME: halfAverageApprox() is not suitable for negative values
 				for (int i = 0; i < CHANNEL_COUNT; i++) {
@@ -179,6 +180,52 @@ static MipmapData mipmapsGenerateF16(uint32_t width, uint32_t height, uint8_t *p
 	}
 
 	return mipmapData;
+}
+
+bool Image::compress() {
+	if (isCompressed())
+		return false;
+
+	if (_format != Format::RGBAF16)
+		return false;
+
+	half *pData = reinterpret_cast<half *>(_data.data());
+
+	uint32_t width = _width;
+	uint32_t height = _height;
+	uint32_t channels = getFormatChannelCount(_format);
+	uint32_t levelCount = _mipLevels;
+
+	CompressionData *pLevels = new CompressionData[levelCount];
+
+	size_t offset = 0;
+	size_t byteSize = 0;
+
+	for (uint32_t i = 0; i < levelCount; i++) {
+		pLevels[i] = Compression::imageCompress(width, height, &pData[offset]);
+		offset += width * height * channels;
+		byteSize += pLevels[i].bufferLength;
+
+		width = max<uint32_t>(width >> 1, 1);
+		height = max<uint32_t>(height >> 1, 1);
+	}
+
+	std::vector<uint8_t> data(byteSize);
+
+	offset = 0;
+	for (uint32_t i = 0; i < levelCount; i++) {
+		CompressionData level = pLevels[i];
+		memcpy(&data[offset], level.pBuffer, level.bufferLength);
+		offset += level.bufferLength;
+
+		free(level.pBuffer);
+	}
+
+	free(pLevels);
+
+	_data = data;
+	_format = Format::BC6HU;
+	return true;
 }
 
 bool Image::isCompressed() const {
@@ -242,7 +289,7 @@ Image *Image::getComponent(Channel channel) const {
 	return new Image(_width, _height, 1, Format::R8, data);
 }
 
-bool Image::generateMipmaps() {
+bool Image::mipmapsGenerate() {
 	if (isCompressed())
 		return false;
 
